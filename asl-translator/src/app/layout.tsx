@@ -1,22 +1,31 @@
-import './globals.css'
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+// app/layout.tsx
+import "./globals.css";
+import Script from "next/script";
 
-const inter = Inter({ subsets: ['latin'] })
-
-export const metadata: Metadata = {
-  title: 'ASL Translator',
-  description: 'Real-time ASL to Speech translator with autocomplete',
-}
+export const metadata = {
+  title: "ASL Translator",
+  description: "Translate ASL to text",
+};
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <head>
+        {/* Load MediaPipe scripts before your interactive code */}
+        <Script
+          src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"
+          strategy="beforeInteractive"
+        />
+        <Script
+          src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
+          strategy="beforeInteractive"
+        />
+      </head>
+      <body>{children}</body>
     </html>
-  )
+  );
 }
