@@ -46,9 +46,9 @@ def upload_file_to_drive(file_path: str, folder_id: str = None):
     file.SetContentFile(file_path)
     file.Upload()
 
-    file_id = file["id"]
-    shareable_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
-    return shareable_link
+    # file_id = file["id"]
+    # shareable_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
+    # return shareable_link
 
     print(f"Uploaded {file_name} to Google Drive.")
 
