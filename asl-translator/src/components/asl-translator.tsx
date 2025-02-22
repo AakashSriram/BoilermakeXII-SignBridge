@@ -7,9 +7,10 @@ import {
   Sun,
   Moon,
   Settings,
+  Link2,
 } from "lucide-react";
 
-export default function ASLTranslator() {
+export default function SignBrige() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [detectedText, setDetectedText] = useState("");
@@ -20,7 +21,7 @@ export default function ASLTranslator() {
   const holisticRef = useRef<any>(null);
   const cameraInstanceRef = useRef<any>(null);
 
-  // Initialize MediaPipe Holistic via the global window object
+  // Initialize MediaPipe Holistic from the global window object (via CDN)
   useEffect(() => {
     if (typeof window !== "undefined" && window.Holistic) {
       const holistic = new window.Holistic({
@@ -42,28 +43,61 @@ export default function ASLTranslator() {
     }
   }, []);
 
-  // Process MediaPipe results and batch landmark frames for prediction
+  // Helper: extracts landmarks and fills missing entries.
+  const extract = (landmarks: any, count: number) => {
+    if (!landmarks || landmarks.length === 0) {
+      return Array(count).fill({ x: 0, y: 0, z: 0 });
+    }
+    if (landmarks.length < count) {
+      const missing = Array(count - landmarks.length).fill({
+        x: 0,
+        y: 0,
+        z: 0,
+      });
+      return [...landmarks, ...missing];
+    }
+    return landmarks.slice(0, count);
+  };
+
+  // Process MediaPipe results
   const onResults = (results: any) => {
-    const extract = (landmarks: any, count: number) => {
-      if (!landmarks || landmarks.length === 0) {
-        return Array(count).fill({ x: 0, y: 0, z: 0 });
-      }
-      if (landmarks.length < count) {
-        const missing = Array(count - landmarks.length).fill({
-          x: 0,
-          y: 0,
-          z: 0,
-        });
-        return [...landmarks, ...missing];
-      }
-      return landmarks.slice(0, count);
-    };
-
+    // Extract face and pose landmarks as usual.
     const faceLandmarks = extract(results.faceLandmarks, 468);
-    const leftHandLandmarks = extract(results.leftHandLandmarks, 21);
     const poseLandmarks = extract(results.poseLandmarks, 33);
-    const rightHandLandmarks = extract(results.rightHandLandmarks, 21);
 
+    // Extract left-hand landmarks.
+    let leftHandLandmarks = extract(results.leftHandLandmarks, 21);
+    // Extract right-hand landmarks (without flipping yet)
+    const rightHandRaw = extract(results.rightHandLandmarks, 21);
+
+    // Check if left-hand landmarks are effectively "empty"
+    const leftIsEmpty = leftHandLandmarks.every(
+      (lm: any) => lm.x === 0 && lm.y === 0 && lm.z === 0
+    );
+
+    let rightHandLandmarks;
+    if (leftIsEmpty) {
+      // If left-hand is empty, assume sign is done with right hand.
+      // Flip right-hand landmarks and assign them to the left-hand slot.
+      leftHandLandmarks = rightHandRaw.map((lm: any) => ({
+        x: 1 - lm.x, // horizontal flip
+        y: lm.y,
+        z: lm.z,
+      }));
+      // Optionally, set the right-hand slot to zeros.
+      rightHandLandmarks = Array(21).fill({ x: 0, y: 0, z: 0 });
+    } else {
+      // Otherwise, assume left-hand sign is being used.
+      // Optionally, you can also flip right-hand landmarks if needed;
+      // here we simply flip them for consistency.
+      rightHandLandmarks = rightHandRaw.map((lm: any) => ({
+        x: 1 - lm.x,
+        y: lm.y,
+        z: lm.z,
+      }));
+    }
+
+    // Combine landmarks in order: face, left hand, pose, right hand.
     const landmarks = [
       ...faceLandmarks.map((lm: any) => [lm.x, lm.y, lm.z]),
       ...leftHandLandmarks.map((lm: any) => [lm.x, lm.y, lm.z]),
@@ -86,7 +120,7 @@ export default function ASLTranslator() {
     });
   };
 
-  // Send the accumulated landmark frames to the backend for prediction
+  // Send accumulated landmark frames to the backend for prediction.
   const sendLandmarks = async (frames: number[][][]) => {
     try {
       const response = await fetch("http://localhost:8000/predict", {
@@ -107,7 +141,7 @@ export default function ASLTranslator() {
     }
   };
 
-  // Toggle recording: start or stop the camera feed and processing
+  // Toggle recording: start/stop camera feed & processing.
   const toggleRecording = () => {
     if (!isRecording) {
       if (videoRef.current && holisticRef.current && window.Camera) {
@@ -142,9 +176,12 @@ export default function ASLTranslator() {
       }`}
     >
       {/* Navbar */}
-      <nav className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-        <div className="text-lg font-extrabold tracking-wider">
-          ASL TRANSLATOR
+      <nav className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+        <div className="flex items-center gap-2">
+          <Link2 size={28} className="text-blue-400" />
+          <span className="text-2xl font-extrabold tracking-widest">
+            SignBrige
+          </span>
         </div>
         <div className="flex items-center gap-4">
           <button
@@ -159,45 +196,48 @@ export default function ASLTranslator() {
         </div>
       </nav>
 
-      {/* Main Content */}
-      <main className="flex-grow flex flex-col items-center justify-center px-4">
-        {/* Enlarged Camera Feed */}
-        <div className="relative w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl mb-4">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-auto object-cover brightness-90"
-          />
-          <button
-            onClick={toggleRecording}
-            className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-700 transition-colors p-4 rounded-full shadow-lg transform hover:scale-105"
-          >
-            <IconCamera size={28} />
-          </button>
+      {/* Main Content: Two-column layout */}
+      <main className="flex flex-grow flex-col lg:flex-row items-center justify-center p-4">
+        {/* Left: Enlarged Camera Feed */}
+        <div className="w-full lg:w-1/2 p-2 flex justify-center">
+          <div className="relative w-full max-w-3xl rounded-3xl overflow-hidden shadow-2xl">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-auto object-cover brightness-90"
+            />
+            <button
+              onClick={toggleRecording}
+              className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-700 transition-colors p-4 rounded-full shadow-lg transform hover:scale-105"
+            >
+              <IconCamera size={28} />
+            </button>
+          </div>
         </div>
-
-        {/* Prediction Card */}
-        <div className="bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-4 shadow-xl w-full max-w-sm mb-4">
-          <h2 className="text-lg font-semibold mb-2">Detected Sign</h2>
-          <p className="text-xl tracking-wide">
-            {detectedText || "Waiting for prediction..."}
-          </p>
-        </div>
-
-        {/* Controls */}
-        <div className="flex gap-4">
-          <button
-            onClick={() => setDetectedText("")}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 transition-colors rounded-full shadow-md text-sm"
-          >
-            Clear Text
-          </button>
-          <button className="px-4 py-2 bg-green-600 hover:bg-green-700 transition-colors rounded-full shadow-md flex items-center gap-2 text-sm">
-            <Mic size={16} />
-            Speak Text
-          </button>
+        {/* Right: Prediction Card and Controls */}
+        <div className="w-full lg:w-1/2 p-2 flex flex-col items-center justify-center">
+          <div className="bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-8 shadow-xl w-full max-w-md mb-6">
+            <h2 className="text-xl font-semibold mb-4 text-center">
+              Detected Sign
+            </h2>
+            <p className="text-2xl tracking-wider text-center">
+              {detectedText || "Waiting for prediction..."}
+            </p>
+          </div>
+          <div className="flex gap-4">
+            <button
+              onClick={() => setDetectedText("")}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 transition-colors rounded-full shadow-md text-sm"
+            >
+              Clear Text
+            </button>
+            <button className="px-4 py-2 bg-green-600 hover:bg-green-700 transition-colors rounded-full shadow-md flex items-center gap-2 text-sm">
+              <Mic size={16} />
+              Speak Text
+            </button>
+          </div>
         </div>
       </main>
     </div>

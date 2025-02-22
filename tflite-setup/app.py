@@ -13,7 +13,6 @@ CORS(app, origins=["http://localhost:3000"])
 MODEL_PATH = "model.tflite"
 JSON_MAP_PATH = "sign_to_prediction_index_map.json"
 
-# For debugging, print the current working directory
 print("Current working directory:", os.getcwd())
 
 # Global lock to ensure thread-safe inference
@@ -54,7 +53,6 @@ def predict():
                 "error": f"Invalid input shape: expected (N, 543, 3), got {input_data.shape}"
             }), 400
 
-        # Use a lock to prevent concurrent access to the interpreter.
         with inference_lock:
             if predict_fn:
                 output = predict_fn(inputs=input_data)
@@ -68,13 +66,17 @@ def predict():
         
         preds = preds.reshape(-1)
         predicted_index = int(np.argmax(preds))
+        max_confidence = float(np.max(preds))
         predicted_sign = p2s_map.get(predicted_index, "Unknown")
-        
-        return jsonify({"predicted_sign": predicted_sign})
+
+        # If the prediction maps to "lion", set it to "No sign detected"
+        if predicted_sign.lower() == "lion":
+            predicted_sign = "No sign detected"
+
+        return jsonify({"predicted_sign": predicted_sign, "confidence": max_confidence})
     except Exception as e:
         print("Error during prediction:", e)
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    # Run the Flask app on port 8000.
     app.run(host="0.0.0.0", port=8000)
