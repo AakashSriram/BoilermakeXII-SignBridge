@@ -17,7 +17,28 @@ export default function SignBrige() {
   const [isRecording, setIsRecording] = useState(false);
   const [detectedText, setDetectedText] = useState("");
   const [landmarksBatch, setLandmarksBatch] = useState<number[][][]>([]);
-  const framesToSend = 10;
+  const framesToSend = 20;
+  const [detectedTexts, setDetectedTexts] = useState<string[]>([]);
+
+  // Adds a new detected word if the array has less than 5 items.
+  const addDetectedText = (text: string) => {
+    setDetectedTexts((prev) => {
+      // Return previous state if:
+      // - text is empty or a placeholder (e.g., "No signs detected")
+      // - the array already has 5 entries
+      // - the text already exists in the array
+      if (!text || text === "No signs detected" || prev.length >= 5 || prev.includes(text)) {
+        return prev;
+      }
+      return [...prev, text];
+    });
+  };
+  
+  
+
+  const removeDetectedText = (index: number) => {
+    setDetectedTexts((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const holisticRef = useRef<any>(null);
@@ -90,8 +111,7 @@ export default function SignBrige() {
       rightHandLandmarks = Array(21).fill({ x: 0, y: 0, z: 0 });
     } else {
       // Otherwise, assume left-hand sign is being used.
-      // Optionally, you can also flip right-hand landmarks if needed;
-      // here we simply flip them for consistency.
+      // Flip right-hand landmarks for consistency.
       rightHandLandmarks = rightHandRaw.map((lm: any) => ({
         x: 1 - lm.x,
         y: lm.y,
@@ -133,6 +153,7 @@ export default function SignBrige() {
       const data = await response.json();
       if (data.predicted_sign) {
         setDetectedText(data.predicted_sign);
+        addDetectedText(data.predicted_sign);
       } else {
         console.error("Prediction error:", data.error);
         setDetectedText("Prediction error");
@@ -229,7 +250,7 @@ export default function SignBrige() {
             </button>
           </div>
         </div>
-        {/* Right: Prediction Card and Controls */}
+        {/* Right: Prediction Card, Controls, and History */}
         <div className="w-full lg:w-1/2 p-2 flex flex-col items-center justify-center">
           <div className="bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-8 shadow-xl w-full max-w-md mb-6">
             <h2 className="text-xl font-semibold mb-4 text-center">
@@ -239,7 +260,7 @@ export default function SignBrige() {
               {detectedText || "Waiting for prediction..."}
             </p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-4 mb-6">
             <button
               onClick={() => setDetectedText("")}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 transition-colors rounded-full shadow-md text-sm"
@@ -250,6 +271,34 @@ export default function SignBrige() {
               <Mic size={16} />
               Speak Text
             </button>
+          </div>
+          {/* Display detected texts array */}
+          <div className="w-full max-w-md bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
+            <h3 className="text-lg font-semibold mb-2 text-center">
+              Detected Signs History
+            </h3>
+            {detectedTexts.length > 0 ? (
+              <ul className="space-y-2">
+                {detectedTexts.map((text, index) => (
+                  <li
+                    key={index}
+                    className="flex items-center justify-between bg-gray-700 rounded-lg p-2"
+                  >
+                    <span>{text}</span>
+                    <button
+                      onClick={() => removeDetectedText(index)}
+                      className="text-sm text-red-400 hover:text-red-600"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-center text-gray-400">
+                No signs detected yet.
+              </p>
+            )}
           </div>
         </div>
       </main>
