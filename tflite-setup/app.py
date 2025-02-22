@@ -5,14 +5,10 @@ import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import tensorflow as tf
-from google import genai  # Import the Google Generative AI client
-import numpy as np
-import json
-import os
-import threading
+from google import genai
 from werkzeug.utils import secure_filename
-
-from googledrive import upload_file_to_drive
+from pydrive2.auth import GoogleAuth
+from pydrive2.drive import GoogleDrive
 
 app = Flask(__name__)
 # Allow requests from http://localhost:3000
@@ -46,6 +42,47 @@ with open(JSON_MAP_PATH, "r") as f:
     s2p_map = json.load(f)
 s2p_map = {k.lower(): v for k, v in s2p_map.items()}
 p2s_map = {v: k for k, v in s2p_map.items()}
+
+
+# Authenticate using a Service Account
+def authenticate_service_account():
+    gauth = GoogleAuth()
+
+    # Configure the settings for the service account
+    gauth.settings = {
+        "client_config_backend": "service",
+        "service_config": {
+            "client_json_file_path": "service_account.json",
+            "client_user_email": "pydrive-service-account@signbridge-451708.iam.gserviceaccount.com",
+        },
+        "oauth_scope": [
+            "https://www.googleapis.com/auth/drive",
+            "https://www.googleapis.com/auth/drive.file",
+            "https://www.googleapis.com/auth/drive.appdata",
+        ],
+    }
+
+    # Authenticate with the service account
+    gauth.ServiceAuth()
+    return GoogleDrive(gauth)
+
+
+def upload_file_to_drive(file_path: str, folder_id: str = None):
+    drive = authenticate_service_account()
+
+    file_name = os.path.basename(file_path)
+    file_metadata = {"title": file_name}
+    if folder_id:
+        file_metadata["parents"] = [{"id": folder_id}]
+
+    file = drive.CreateFile(file_metadata)
+    file.SetContentFile(file_path)
+    file.Upload()
+
+    file_id = file["id"]
+    shareable_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
+    print(f"Uploaded {file_name} to Google Drive.")
+    return shareable_link
 
 
 @app.route("/upload", methods=["POST"])
