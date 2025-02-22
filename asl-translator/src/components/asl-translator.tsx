@@ -9,8 +9,10 @@ import {
   Settings,
   Link2,
 } from "lucide-react";
+import { useAuth0 } from "@auth0/auth0-react";
 
 export default function SignBrige() {
+  const { user } = useAuth0();
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [detectedText, setDetectedText] = useState("");
@@ -193,6 +195,17 @@ export default function SignBrige() {
           <button className="p-2 rounded-full hover:bg-gray-700 transition-colors">
             <Settings size={24} />
           </button>
+          {/* Display user information if available */}
+          {user && (
+            <div className="flex items-center gap-2">
+              <img
+                src={user.picture}
+                alt={user.name}
+                className="w-10 h-10 rounded-full border-2 border-blue-400"
+              />
+              <span className="text-lg font-medium">{user.name}</span>
+            </div>
+          )}
         </div>
       </nav>
 
