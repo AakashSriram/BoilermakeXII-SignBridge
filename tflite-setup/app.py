@@ -1,10 +1,11 @@
+import os
+import json
+import threading
+import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import tensorflow as tf
-import numpy as np
-import json
-import os
-import threading
+from google import genai  # Import the Google Generative AI client
 
 app = Flask(__name__)
 # Allow requests from http://localhost:3000
@@ -15,9 +16,10 @@ JSON_MAP_PATH = "sign_to_prediction_index_map.json"
 
 print("Current working directory:", os.getcwd())
 
-# Global lock to ensure thread-safe inference
+# Global lock for thread-safe TFLite inference
 inference_lock = threading.Lock()
 
+# Load the TFLite model.
 try:
     interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
     interpreter.allocate_tensors()
@@ -37,10 +39,8 @@ p2s_map = {v: k for k, v in s2p_map.items()}
 
 @app.route('/predict', methods=['POST', 'OPTIONS'])
 def predict():
-    # Handle preflight OPTIONS requests immediately.
     if request.method == "OPTIONS":
         return app.make_default_options_response()
-
     try:
         data = request.get_json(force=True)
         frames = data.get("frames")
@@ -69,13 +69,50 @@ def predict():
         max_confidence = float(np.max(preds))
         predicted_sign = p2s_map.get(predicted_index, "Unknown")
 
-        # If the prediction maps to "lion", set it to "No sign detected"
         if predicted_sign.lower() == "lion":
             predicted_sign = "No sign detected"
 
         return jsonify({"predicted_sign": predicted_sign, "confidence": max_confidence})
     except Exception as e:
         print("Error during prediction:", e)
+        return jsonify({"error": str(e)}), 500
+
+# --- Google Generative AI (Gemini 2.0flash) Setup ---
+
+# For security, store your API key in an environment variable.
+GEN_AI_API_KEY = os.environ.get("GEN_AI_API_KEY", "AIzaSyDceXe1mqRSvkafKu2f5UvbZ2C867ZDqUA")
+
+if not GEN_AI_API_KEY:
+    raise Exception("Please set the GEN_AI_API_KEY environment variable.")
+
+# Instantiate the client.
+client = genai.Client(api_key=GEN_AI_API_KEY)
+
+@app.route('/generate_sentence', methods=['POST', 'OPTIONS'])
+def generate_sentence():
+    if request.method == "OPTIONS":
+        return app.make_default_options_response()
+    try:
+        data = request.get_json(force=True)
+        words = data.get("words")
+        if words is None:
+            return jsonify({"error": "Missing 'words' key in JSON payload"}), 400
+
+        # Build the prompt for Gemini.
+        query = f"Convert these words into a coherent sentence: {words}"
+
+        # Call the Gemini 2.0flash model via the client.
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[query]
+        )
+        
+        # Assume the response object has a 'text' attribute.
+        sentence = response.text
+
+        return jsonify({"sentence": sentence})
+    except Exception as e:
+        print("Error during sentence generation:", e)
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

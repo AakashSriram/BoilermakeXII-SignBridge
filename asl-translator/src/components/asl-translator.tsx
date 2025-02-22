@@ -19,6 +19,8 @@ export default function SignBrige() {
   const [landmarksBatch, setLandmarksBatch] = useState<number[][][]>([]);
   const framesToSend = 20;
   const [detectedTexts, setDetectedTexts] = useState<string[]>([]);
+  const [generatedSentence, setGeneratedSentence] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Adds a new detected word if the array has less than 5 items.
   const addDetectedText = (text: string) => {
@@ -33,8 +35,6 @@ export default function SignBrige() {
       return [...prev, text];
     });
   };
-  
-  
 
   const removeDetectedText = (index: number) => {
     setDetectedTexts((prev) => prev.filter((_, i) => i !== index));
@@ -190,6 +190,35 @@ export default function SignBrige() {
     setIsRecording((prev) => !prev);
   };
 
+  // Generate a coherent sentence using the accumulated words.
+  const handleGenerateSentence = async () => {
+    if (detectedTexts.length !== 5) {
+      console.warn("Need exactly 5 words to generate a sentence.");
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const wordsString = detectedTexts.join(" ");
+      const response = await fetch("http://localhost:8000/generate_sentence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ words: wordsString }),
+      });
+      const data = await response.json();
+      if (data.sentence) {
+        setGeneratedSentence(data.sentence);
+      } else {
+        setGeneratedSentence("Error generating sentence.");
+        console.error("Generation error:", data.error);
+      }
+    } catch (error) {
+      console.error("Error during sentence generation:", error);
+      setGeneratedSentence("Error during sentence generation.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <div
       className={`h-screen font-sans flex flex-col ${
@@ -216,7 +245,6 @@ export default function SignBrige() {
           <button className="p-2 rounded-full hover:bg-gray-700 transition-colors">
             <Settings size={24} />
           </button>
-          {/* Display user information if available */}
           {user && (
             <div className="flex items-center gap-2">
               <img
@@ -250,7 +278,7 @@ export default function SignBrige() {
             </button>
           </div>
         </div>
-        {/* Right: Prediction Card, Controls, and History */}
+        {/* Right: Prediction Card, Controls, History & Sentence Generation */}
         <div className="w-full lg:w-1/2 p-2 flex flex-col items-center justify-center">
           <div className="bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-8 shadow-xl w-full max-w-md mb-6">
             <h2 className="text-xl font-semibold mb-4 text-center">
@@ -272,8 +300,8 @@ export default function SignBrige() {
               Speak Text
             </button>
           </div>
-          {/* Display detected texts array */}
-          <div className="w-full max-w-md bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
+          {/* Detected Signs History */}
+          <div className="w-full max-w-md bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-4 shadow-xl mb-6">
             <h3 className="text-lg font-semibold mb-2 text-center">
               Detected Signs History
             </h3>
@@ -297,6 +325,33 @@ export default function SignBrige() {
             ) : (
               <p className="text-center text-gray-400">
                 No signs detected yet.
+              </p>
+            )}
+          </div>
+          {/* Sentence Generation Section */}
+          <div className="w-full max-w-md bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
+            <h3 className="text-lg font-semibold mb-2 text-center">
+              Generate Sentence
+            </h3>
+            <p className="mb-4 text-center text-sm text-gray-300">
+              {detectedTexts.length === 5
+                ? `Words: ${detectedTexts.join(" ")}`
+                : "Accumulate 5 words to generate a sentence."}
+            </p>
+            <button
+              onClick={handleGenerateSentence}
+              disabled={detectedTexts.length !== 5 || isGenerating}
+              className={`w-full px-4 py-2 rounded-full ${
+                detectedTexts.length === 5
+                  ? "bg-purple-600 hover:bg-purple-700"
+                  : "bg-gray-500 cursor-not-allowed"
+              } text-white`}
+            >
+              {isGenerating ? "Generating..." : "Generate Sentence"}
+            </button>
+            {generatedSentence && (
+              <p className="mt-4 text-center text-lg font-medium">
+                {generatedSentence}
               </p>
             )}
           </div>
