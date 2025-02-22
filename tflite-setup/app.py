@@ -110,6 +110,8 @@ def upload_video():
         folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"
         shareable_link = upload_file_to_drive(file_path, folder_id)
 
+        os.remove(file_path)
+
         return jsonify({"shareable_link": shareable_link}), 200
 
     return jsonify({"error": "File upload failed"}), 500
