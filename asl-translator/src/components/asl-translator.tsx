@@ -1,14 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import {
-  Camera as IconCamera,
-  Mic,
-  Sun,
-  Moon,
-  Settings,
-  Link2,
-} from "lucide-react";
+import { Camera as IconCamera, Mic, Sun, Moon, Settings, Link2 } from "lucide-react";
 import { useAuth0 } from "@auth0/auth0-react";
 
 export default function SignBrige() {
@@ -48,43 +41,40 @@ export default function SignBrige() {
     setDetectedTexts((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Initialize MediaPipe Holistic from the global window object (via CDN)
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.Holistic) {
-      const holistic = new window.Holistic({
-        locateFile: (file: string) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`,
-      });
-      holistic.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        enableSegmentation: false,
-        refineFaceLandmarks: true,
-      });
-      holistic.onResults(onResults);
-      holisticRef.current = holistic;
-    } else {
-      console.error(
-        "window.Holistic is undefined. Ensure the CDN scripts are loaded in layout.tsx."
-      );
-    }
-  }, []);
+    // Initialize MediaPipe Holistic from the global window object (via CDN)
+    useEffect(() => {
+        if (typeof window !== "undefined" && window.Holistic) {
+            const holistic = new window.Holistic({
+                locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`,
+            });
+            holistic.setOptions({
+                modelComplexity: 1,
+                smoothLandmarks: true,
+                enableSegmentation: false,
+                refineFaceLandmarks: true,
+            });
+            holistic.onResults(onResults);
+            holisticRef.current = holistic;
+        } else {
+            console.error("window.Holistic is undefined. Ensure the CDN scripts are loaded in layout.tsx.");
+        }
+    }, []);
 
-  // Helper: extracts landmarks and fills missing entries.
-  const extract = (landmarks: any, count: number) => {
-    if (!landmarks || landmarks.length === 0) {
-      return Array(count).fill({ x: 0, y: 0, z: 0 });
-    }
-    if (landmarks.length < count) {
-      const missing = Array(count - landmarks.length).fill({
-        x: 0,
-        y: 0,
-        z: 0,
-      });
-      return [...landmarks, ...missing];
-    }
-    return landmarks.slice(0, count);
-  };
+    // Helper: extracts landmarks and fills missing entries.
+    const extract = (landmarks: any, count: number) => {
+        if (!landmarks || landmarks.length === 0) {
+            return Array(count).fill({ x: 0, y: 0, z: 0 });
+        }
+        if (landmarks.length < count) {
+            const missing = Array(count - landmarks.length).fill({
+                x: 0,
+                y: 0,
+                z: 0,
+            });
+            return [...landmarks, ...missing];
+        }
+        return landmarks.slice(0, count);
+    };
 
   // Process MediaPipe results
   const onResults = (results: any) => {
@@ -120,20 +110,20 @@ export default function SignBrige() {
       ...rightHandLandmarks.map((lm: any) => [lm.x, lm.y, lm.z]),
     ];
 
-    if (landmarks.length !== 543) {
-      console.error("Incorrect landmark count:", landmarks.length);
-      return;
-    }
+        if (landmarks.length !== 543) {
+            console.error("Incorrect landmark count:", landmarks.length);
+            return;
+        }
 
-    setLandmarksBatch((prev) => {
-      const updated = [...prev, landmarks];
-      if (updated.length === framesToSend) {
-        sendLandmarks(updated);
-        return [];
-      }
-      return updated;
-    });
-  };
+        setLandmarksBatch((prev) => {
+            const updated = [...prev, landmarks];
+            if (updated.length === framesToSend) {
+                sendLandmarks(updated);
+                return [];
+            }
+            return updated;
+        });
+    };
 
   // Send accumulated landmark frames to the backend for prediction.
   const sendLandmarks = async (frames: number[][][]) => {
@@ -261,73 +251,71 @@ export default function SignBrige() {
     setIsRecording((prev) => !prev);
   };
 
-  // Generate a coherent sentence using the accumulated words.
-  const handleGenerateSentence = async () => {
-    if (detectedTexts.length !== 5) {
-      console.warn("Need exactly 5 words to generate a sentence.");
-      return;
-    }
-    setIsGenerating(true);
-    try {
-      const wordsString = detectedTexts.join(" ");
-      const response = await fetch("http://localhost:8000/generate_sentence", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ words: wordsString }),
-      });
-      const data = await response.json();
-      if (data.sentence) {
-        setGeneratedSentence(data.sentence);
-      } else {
-        setGeneratedSentence("Error generating sentence.");
-        console.error("Generation error:", data.error);
-      }
-    } catch (error) {
-      console.error("Error during sentence generation:", error);
-      setGeneratedSentence("Error during sentence generation.");
-    } finally {
-      setIsGenerating(false);
-    }
-  };
+    // Generate a coherent sentence using the accumulated words.
+    const handleGenerateSentence = async () => {
+        if (detectedTexts.length !== 5) {
+            console.warn("Need exactly 5 words to generate a sentence.");
+            return;
+        }
+        setIsGenerating(true);
+        try {
+            const wordsString = detectedTexts.join(" ");
+            const response = await fetch("http://localhost:8000/generate_sentence", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ words: wordsString }),
+            });
+            const data = await response.json();
+            if (data.sentence) {
+                setGeneratedSentence(data.sentence);
+            } else {
+                setGeneratedSentence("Error generating sentence.");
+                console.error("Generation error:", data.error);
+            }
+        } catch (error) {
+            console.error("Error during sentence generation:", error);
+            setGeneratedSentence("Error during sentence generation.");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
 
-  return (
-    <div
-      className={`h-screen font-sans flex flex-col ${
-        isDarkMode
-          ? "bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white"
-          : "bg-gradient-to-br from-gray-100 via-white to-gray-200 text-gray-900"
-      }`}
-    >
-      {/* Navbar */}
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-        <div className="flex items-center gap-2">
-          <Link2 size={28} className="text-blue-400" />
-          <span className="text-2xl font-extrabold tracking-widest">
-            SignBrige
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-2 rounded-full hover:bg-gray-700 transition-colors"
-          >
-            {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
-          </button>
-          <button className="p-2 rounded-full hover:bg-gray-700 transition-colors">
-            <Settings size={24} />
-          </button>
-          {user && (
-            <div className="flex items-center gap-2">
-              <img
-                src={user.picture}
-                alt={user.name}
-                className="w-10 h-10 rounded-full border-2 border-blue-400"
-              />
-              <span className="text-lg font-medium">{user.name}</span>
-            </div>
-          )}
-        </div>
-      </nav>
+    return (
+        <div
+            className={`h-screen font-sans flex flex-col ${
+                isDarkMode
+                    ? "bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white"
+                    : "bg-gradient-to-br from-gray-100 via-white to-gray-200 text-gray-900"
+            }`}
+        >
+            {/* Navbar */}
+            <nav className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <div className="flex items-center gap-2">
+                    <Link2 size={28} className="text-blue-400" />
+                    <span className="text-2xl font-extrabold tracking-widest">SignBrige</span>
+                </div>
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => setIsDarkMode(!isDarkMode)}
+                        className="p-2 rounded-full hover:bg-gray-700 transition-colors"
+                    >
+                        {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
+                    </button>
+                    <button className="p-2 rounded-full hover:bg-gray-700 transition-colors">
+                        <Settings size={24} />
+                    </button>
+                    {user && (
+                        <div className="flex items-center gap-2">
+                            <img
+                                src={user.picture}
+                                alt={user.name}
+                                className="w-10 h-10 rounded-full border-2 border-blue-400"
+                            />
+                            <span className="text-lg font-medium">{user.name}</span>
+                        </div>
+                    )}
+                </div>
+            </nav>
 
       {/* Main Content: Two-column layout */}
       <main className="flex flex-grow flex-col lg:flex-row items-center justify-center p-4">
