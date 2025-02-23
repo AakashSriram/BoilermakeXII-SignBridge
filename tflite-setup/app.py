@@ -241,14 +241,13 @@ def upload_video():
 
     # If there's already an audio link, do post_sync automatically
     if audio_shareable_link:
-        # lipsynced_video_link = post_sync(video_shareable_link, audio_shareable_link)
-        # return jsonify({
-        #     "shareable_link": video_shareable_link,
-        #     "final_lipsynced_link": lipsynced_video_link
-        # }), 200
+        lipsynced_video_link = post_sync(video_shareable_link, audio_shareable_link)
+        return jsonify({
+             "shareable_link": video_shareable_link,
+             "final_lipsynced_link": lipsynced_video_link
+        }), 200
 
         # For demonstration, pretend we have post_sync disabled:
-        pass
 
     # Return the shareable link
     return jsonify({"shareable_link": video_shareable_link}), 200
@@ -256,15 +255,17 @@ def upload_video():
 @app.route("/uploadaudio", methods=["POST", "OPTIONS"])
 def upload_audio():
     """
-    Generates audio (via TTS) or receives an uploaded audio file,
-    stores the shareable link, and if we already have a video link,
-    calls post_sync immediately.
+    1. Receives text in JSON payload.
+    2. Generates MP3 via gTTS.
+    3. Converts MP3 to WAV via ffmpeg.
+    4. Uploads the WAV to Google Drive, then removes local files.
+    5. If a video link is already stored, calls post_sync automatically.
     """
     global audio_shareable_link, video_shareable_link, lipsynced_video_link
 
     if request.method == "OPTIONS":
         response = jsonify({"message": "CORS preflight passed"})
-        response.status_code = 200  # Ensure response is HTTP 200 OK
+        response.status_code = 200  # Ensure 200 for preflight
         return response
 
     try:
@@ -275,24 +276,46 @@ def upload_audio():
         if not sentence:
             return jsonify({"error": "Missing 'sentence' key in JSON payload"}), 400
 
-        # Convert text to speech
+        # Generate MP3 from text
         tts = gTTS(text=sentence, lang="en")
-        audio_filename = "generated_audio.mp3"
-        audio_path = os.path.join(UPLOAD_FOLDER, audio_filename)
+        mp3_filename = "generated_audio.mp3"
+        mp3_path = os.path.join(UPLOAD_FOLDER, mp3_filename)
+        tts.save(mp3_path)
 
-        # Save the audio file
-        tts.save(audio_path)
+        # Convert MP3 to WAV using ffmpeg
+        wav_filename = "generated_audio.wav"
+        wav_path = os.path.join(UPLOAD_FOLDER, wav_filename)
 
-        # Upload to Google Drive
-        folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"
-        shareable_link = upload_file_to_drive(audio_path, folder_id)
-        os.remove(audio_path)
+        ffmpeg_command = [
+            "ffmpeg",
+            "-y",            # Overwrite if file exists
+            "-i", mp3_path,  # Input (MP3)
+            "-acodec", "pcm_s16le",  # Uncompressed PCM
+            "-ar", "44100",  # Sample rate
+            wav_path
+        ]
+        try:
+            subprocess.run(ffmpeg_command, check=True)
+            print(f"Converted {mp3_filename} to {wav_filename} successfully.")
+        except subprocess.CalledProcessError as e:
+            os.remove(mp3_path)
+            return jsonify({"error": f"ffmpeg conversion failed: {str(e)}"}), 500
 
-        # Store the shareable link in global variable
+        # Remove the original MP3 after successful conversion
+        os.remove(mp3_path)
+
+        # Upload the WAV file to Google Drive
+        folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"  # your folder ID
+        shareable_link = upload_file_to_drive(wav_path, folder_id)
+
+        # Remove the local WAV file
+        os.remove(wav_path)
+
+        # Store link in global variable
         audio_shareable_link = shareable_link
         print("Stored audio link:", audio_shareable_link)
 
-        # If video link already exists, immediately do post_sync
+        # If a video link already exists, do post_sync
         if video_shareable_link:
             lipsynced_video_link = post_sync(video_shareable_link, audio_shareable_link)
             return jsonify({
@@ -303,8 +326,9 @@ def upload_audio():
             return jsonify({"shareable_link": audio_shareable_link}), 200
 
     except Exception as e:
-        print("Error during text-to-speech generation:", e)
+        print("Error during audio generation or upload:", e)
         return jsonify({"error": str(e)}), 500
+
 
 
 @app.route("/predict", methods=["POST", "OPTIONS"])
