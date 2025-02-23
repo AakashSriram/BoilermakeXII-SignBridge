@@ -12,7 +12,9 @@ from werkzeug.utils import secure_filename
 from gtts import gTTS
 
 
+import ssl
 
+ssl._create_default_https_context = ssl._create_unverified_context
 
 app = Flask(__name__)
 # Allow requests from http://localhost:3000
@@ -76,17 +78,24 @@ def upload_file_to_drive(file_path: str, folder_id: str = None):
     drive = authenticate_service_account()
 
     file_name = os.path.basename(file_path)
+    file_size = os.path.getsize(file_path)
+    print(f"Preparing to upload file: {file_name}, Size: {file_size} bytes")
+
     file_metadata = {"title": file_name}
     if folder_id:
         file_metadata["parents"] = [{"id": folder_id}]
 
     file = drive.CreateFile(file_metadata)
     file.SetContentFile(file_path)
-    file.Upload()
+
+    try:
+        file.Upload({"convert": True})
+        print(f"Successfully uploaded {file_name} to Google Drive.")
+    except Exception as e:
+        print(f"Failed to upload file: {e}")
 
     file_id = file["id"]
     shareable_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
-    print(f"Uploaded {file_name} to Google Drive.")
     return shareable_link
 
 
