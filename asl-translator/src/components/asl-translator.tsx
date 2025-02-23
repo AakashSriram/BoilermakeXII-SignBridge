@@ -70,13 +70,7 @@ const SimpleGlowLoader = () => {
   );
 };
 
-
 export default function SignBridge() {
-  const loaderVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1 },
-    exit: { opacity: 0 },
-  };
   const finalVideoRef = useRef(null);
   // Use a ref to track removed signs for immediate updates
   const removedSignsRef = useRef<string[]>([]);
@@ -107,6 +101,28 @@ export default function SignBridge() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const holisticRef = useRef<any>(null);
   const cameraInstanceRef = useRef<any>(null);
+
+  // Reset function to clear all states and refs
+  const resetAll = () => {
+    setDetectedText("");
+    setDetectedTexts([]);
+    setGeneratedSentence("");
+    setFinalLipsyncedLink("");
+    setIsRecording(false);
+    setIsGenerating(false);
+    setIsGeneratingLipSync(false);
+    setLandmarksBatch([]);
+    setDemographics({
+      predicted_race: "",
+      race_confidence: 0,
+      predicted_ethnicity: "",
+      ethnicity_confidence: 0,
+      predicted_gender: "",
+      gender_confidence: 0,
+    });
+    removedSignsRef.current = [];
+    // Optionally reset media recorder and camera here if needed.
+  };
 
   useEffect(() => {
     if (finalLipsyncedLink && finalVideoRef.current) {
@@ -142,7 +158,8 @@ export default function SignBridge() {
   useEffect(() => {
     if (typeof window !== "undefined" && window.Holistic) {
       const holistic = new window.Holistic({
-        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`,
+        locateFile: (file: string) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`,
       });
       holistic.setOptions({
         modelComplexity: 1,
@@ -153,7 +170,9 @@ export default function SignBridge() {
       holistic.onResults(onResults);
       holisticRef.current = holistic;
     } else {
-      console.error("window.Holistic is undefined. Ensure the CDN scripts are loaded in layout.tsx.");
+      console.error(
+        "window.Holistic is undefined. Ensure the CDN scripts are loaded in layout.tsx."
+      );
     }
   }, []);
 
@@ -173,7 +192,9 @@ export default function SignBridge() {
     const poseLandmarks = extract(results.poseLandmarks, 33);
     let leftHandLandmarks = extract(results.leftHandLandmarks, 21);
     const rightHandRaw = extract(results.rightHandLandmarks, 21);
-    const leftIsEmpty = leftHandLandmarks.every((lm: any) => lm.x === 0 && lm.y === 0 && lm.z === 0);
+    const leftIsEmpty = leftHandLandmarks.every(
+      (lm: any) => lm.x === 0 && lm.y === 0 && lm.z === 0
+    );
     let rightHandLandmarks;
     if (leftIsEmpty) {
       leftHandLandmarks = rightHandRaw.map((lm: any) => ({
@@ -276,8 +297,6 @@ export default function SignBridge() {
     }
     setIsRecording((prev) => !prev);
   };
-
-  
 
   const startRecording = async () => {
     setIsGeneratingLipSync(false);
@@ -406,7 +425,6 @@ export default function SignBridge() {
     }
   };
 
-
   const handleGenerateSentence = async () => {
     if (detectedTexts.length !== 5) {
       console.warn("Need exactly 5 words to generate a sentence.");
@@ -476,41 +494,38 @@ export default function SignBridge() {
       {/* Main Content: Two-column layout */}
       <main className="flex flex-grow flex-col lg:flex-row items-center justify-center p-4">
         {/* Left: Camera Feed */}
-<div className="w-full lg:w-1/2 p-2 flex justify-center">
-
-    <AnimatePresence mode="wait">
-
-      {!isGeneratingLipSync ? (
-          <div className="relative w-full max-w-3xl rounded-3xl overflow-hidden shadow-2xl">
-        <motion.div
-          key="video-container"
-          initial={{ opacity: 1 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.5 }}
-          className="relative"
-        >
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-auto object-cover brightness-90"
-          />
-          <button
-            onClick={toggleRecording}
-            className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-700 transition-colors p-4 rounded-full shadow-lg transform hover:scale-105"
-          >
-            <IconCamera size={28} />
-          </button>
-        </motion.div>
-          </div>
-      ) : (
-        <SimpleGlowLoader></SimpleGlowLoader>
-      )}
-    </AnimatePresence>
-
-</div>
+        <div className="w-full lg:w-1/2 p-2 flex justify-center">
+          <AnimatePresence mode="wait">
+            {!isGeneratingLipSync ? (
+              <div className="relative w-full max-w-3xl rounded-3xl overflow-hidden shadow-2xl">
+                <motion.div
+                  key="video-container"
+                  initial={{ opacity: 1 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.5 }}
+                  className="relative"
+                >
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-auto object-cover brightness-90"
+                  />
+                  <button
+                    onClick={toggleRecording}
+                    className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-700 transition-colors p-4 rounded-full shadow-lg transform hover:scale-105"
+                  >
+                    <IconCamera size={28} />
+                  </button>
+                </motion.div>
+              </div>
+            ) : (
+              <SimpleGlowLoader />
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* Right: Controls and Predictions */}
         <div className="w-full lg:w-1/2 p-2 flex flex-col items-center justify-center">
@@ -563,7 +578,7 @@ export default function SignBridge() {
       </main>
 
       {finalLipsyncedLink && (
-        <section ref={finalVideoRef} className="min-h-screen w-full flex items-center justify-center p-4">
+        <section ref={finalVideoRef} className="min-h-screen w-full flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-6xl bg-gradient-to-br from-gray-900 via-gray-800 to-black bg-opacity-90 backdrop-blur-lg rounded-3xl shadow-2xl p-12 flex flex-col lg:flex-row">
             {/* Left: Final Video */}
             <div className="lg:w-2/3 w-full relative pb-[56.25%] lg:pb-0">
@@ -573,63 +588,63 @@ export default function SignBridge() {
                 autoPlay
                 className="absolute lg:relative top-0 left-0 w-full h-full object-contain rounded-3xl"
               />
-              <div className="mt-6 lg:hidden flex justify-center">
-                <a
-                  href={finalLipsyncedLink}
-                  download="final_video.webm"
-                  className="inline-block px-10 py-5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-full shadow transition-colors duration-300"
-                >
-                  Download Video
-                </a>
-              </div>
             </div>
-            {/* Right: Flashy Demographics Card */}
-            <div className="lg:w-1/3 w-full mt-6 lg:mt-0 lg:ml-8 flex flex-col justify-center">
-              <div className="relative p-8 rounded-3xl overflow-hidden shadow-2xl">
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 opacity-30 blur-lg"></div>
-                <div className="relative z-10 bg-black bg-opacity-75 p-8 rounded-3xl border border-gray-700">
-                  <h3 className="text-3xl font-bold mb-6 text-center text-white drop-shadow-lg">
-                    Demographic Predictions
-                  </h3>
-                  <motion.p
-                    className="text-xl text-white mb-4"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                  >
-                    <span className="font-semibold">Race:</span> {demographics.predicted_race || "N/A"}{" "}
-                    ({demographics.race_confidence ? (demographics.race_confidence * 100).toFixed(2) : "N/A"}%)
-                  </motion.p>
-                  <motion.p
-                    className="text-xl text-white mb-4"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.7 }}
-                  >
-                    <span className="font-semibold">Ethnicity:</span> {demographics.predicted_ethnicity || "N/A"}{" "}
-                    ({demographics.ethnicity_confidence ? (demographics.ethnicity_confidence * 100).toFixed(2) : "N/A"}%)
-                  </motion.p>
-                  <motion.p
-                    className="text-xl text-white"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1.0 }}
-                  >
-                    <span className="font-semibold">Gender:</span> {demographics.predicted_gender || "N/A"}{" "}
-                    ({demographics.gender_confidence ? (demographics.gender_confidence * 100).toFixed(2) : "N/A"}%)
-                  </motion.p>
-                </div>
-              </div>
-              <div className="mt-6 hidden lg:flex justify-center">
-                <a
-                  href={finalLipsyncedLink}
-                  download="final_video.webm"
-                  className="inline-block px-10 py-5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-full shadow transition-colors duration-300"
-                >
-                  Download Video
-                </a>
-              </div>
-            </div>
+            {/* Right: Smaller Demographics Card with Download and Reset Buttons */}
+            <div className="lg:w-1/3 w-full mt-6 lg:mt-0 lg:ml-8 flex flex-col items-center">
+  <div className="relative p-4 h-full rounded-2xl overflow-hidden shadow-md w-full">
+    <div className="absolute h-full inset-0 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 opacity-30 blur-md"></div>
+    <div className="relative z-10 h-full bg-black bg-opacity-75 p-4 rounded-2xl border border-gray-700">
+      <h3 className="text-3xl font-bold mb-3 text-center text-white drop-shadow-lg">
+        Demographic Predictions
+      </h3>
+      <div className="flex flex-col space-y-4">
+        <motion.p
+          className="text-lg text-white"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <span className="font-semibold">Race:</span> {demographics.predicted_race || "N/A"}{" "}
+          ({demographics.race_confidence ? (demographics.race_confidence * 100).toFixed(2) : "N/A"}%)
+        </motion.p>
+        <motion.p
+          className="text-lg text-white"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+        >
+          <span className="font-semibold">Ethnicity:</span> {demographics.predicted_ethnicity || "N/A"}{" "}
+          ({demographics.ethnicity_confidence ? (demographics.ethnicity_confidence * 100).toFixed(2) : "N/A"}%)
+        </motion.p>
+        <motion.p
+          className="text-lg text-white"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.0 }}
+        >
+          <span className="font-semibold">Gender:</span> {demographics.predicted_gender || "N/A"}{" "}
+          ({demographics.gender_confidence ? (demographics.gender_confidence * 100).toFixed(2) : "N/A"}%)
+        </motion.p>
+      </div>
+    </div>
+  </div>
+  <div className="flex mt-4 space-x-4">
+    <a
+      href={finalLipsyncedLink}
+      download="final_video.webm"
+      className="inline-block px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-full shadow transition-colors duration-300"
+    >
+      Download Video
+    </a>
+    <button
+      onClick={resetAll}
+      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-full shadow transition-colors duration-300"
+    >
+      Reset
+    </button>
+  </div>
+</div>
+
           </div>
         </section>
       )}
