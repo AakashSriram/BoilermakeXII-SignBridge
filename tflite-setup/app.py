@@ -189,7 +189,7 @@ def generate_sentence():
             return jsonify({"error": "Missing 'words' key in JSON payload"}), 400
 
         # Build the prompt for Gemini.
-        query = f"Convert these words into a coherent sentence: {words}"
+        query = f"Convert these words into a coherent sentence: {words}. Just give me the sentence. Make it sound normal."
 
         # Call the Gemini 2.0flash model via the client.
         response = client.models.generate_content(
