@@ -135,7 +135,6 @@ export default function SignBridge() {
       if (
         !text ||
         text === "No signs detected" ||
-        prev.length >= 5 ||
         prev.includes(text) ||
         removedSignsRef.current.includes(text)
       ) {
@@ -426,8 +425,8 @@ export default function SignBridge() {
   };
 
   const handleGenerateSentence = async () => {
-    if (detectedTexts.length !== 5) {
-      console.warn("Need exactly 5 words to generate a sentence.");
+    if (detectedTexts.length < 2) {
+      console.warn("Need at least 2 words to generate a sentence.");
       return;
     }
     setIsGenerating(true);
@@ -537,7 +536,11 @@ export default function SignBridge() {
           </div>
 
           {/* Detected Signs History */}
-          <div className="w-full max-w-md bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-4 shadow-xl mb-6">
+          <div
+            className={`w-full max-w-md bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-4 shadow-xl mb-6 ${
+              detectedTexts.length > 5 ? "overflow-y-auto max-h-60" : ""
+            }`}
+          >
             <h3 className="text-lg font-semibold mb-2 text-center">Detected Signs History</h3>
             {detectedTexts.length > 0 ? (
               <ul className="space-y-2">
@@ -557,20 +560,20 @@ export default function SignBridge() {
 
           {/* Sentence Generation */}
           <div className="w-full max-w-md bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
-            <h3 className="text-lg font-semibold mb-2 text-center">Generate Sentence</h3>
+            <h3 className="text-lg font-semibold mb-2 text-center">Generate Sentences</h3>
             <p className="mb-4 text-center text-sm text-gray-300">
-              {detectedTexts.length === 5
+              {detectedTexts.length >= 2
                 ? `Words: ${detectedTexts.join(" ")}`
-                : "Accumulate 5 words to generate a sentence."}
+                : "Accumulate at least 2 words to generate a sentence."}
             </p>
             <button
               onClick={handleGenerateSentence}
-              disabled={detectedTexts.length !== 5 || isGenerating}
+              disabled={detectedTexts.length < 2 || isGenerating}
               className={`w-full px-4 py-2 rounded-full ${
-                detectedTexts.length === 5 ? "bg-purple-600 hover:bg-purple-700" : "bg-gray-500 cursor-not-allowed"
+                detectedTexts.length >= 2 ? "bg-purple-600 hover:bg-purple-700" : "bg-gray-500 cursor-not-allowed"
               } text-white`}
             >
-              {isGenerating ? "Generating..." : "Generate Sentence"}
+              {isGenerating ? "Generating..." : "Generate Sentences"}
             </button>
             {generatedSentence && <p className="mt-4 text-center text-lg font-medium">{generatedSentence}</p>}
           </div>
@@ -589,62 +592,61 @@ export default function SignBridge() {
                 className="absolute lg:relative top-0 left-0 w-full h-full object-contain rounded-3xl"
               />
             </div>
-            {/* Right: Smaller Demographics Card with Download and Reset Buttons */}
+            {/* Right: Demographics Card with Download and Reset Buttons */}
             <div className="lg:w-1/3 w-full mt-6 lg:mt-0 lg:ml-8 flex flex-col items-center">
-  <div className="relative p-4 h-full rounded-2xl overflow-hidden shadow-md w-full">
-    <div className="absolute h-full inset-0 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 opacity-30 blur-md"></div>
-    <div className="relative z-10 h-full bg-black bg-opacity-75 p-4 rounded-2xl border border-gray-700">
-      <h3 className="text-3xl font-bold mb-3 text-center text-white drop-shadow-lg">
-        Demographic Predictions
-      </h3>
-      <div className="flex flex-col space-y-4">
-        <motion.p
-          className="text-lg text-white"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <span className="font-semibold">Race:</span> {demographics.predicted_race || "N/A"}{" "}
-          ({demographics.race_confidence ? (demographics.race_confidence * 100).toFixed(2) : "N/A"}%)
-        </motion.p>
-        <motion.p
-          className="text-lg text-white"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-        >
-          <span className="font-semibold">Ethnicity:</span> {demographics.predicted_ethnicity || "N/A"}{" "}
-          ({demographics.ethnicity_confidence ? (demographics.ethnicity_confidence * 100).toFixed(2) : "N/A"}%)
-        </motion.p>
-        <motion.p
-          className="text-lg text-white"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.0 }}
-        >
-          <span className="font-semibold">Gender:</span> {demographics.predicted_gender || "N/A"}{" "}
-          ({demographics.gender_confidence ? (demographics.gender_confidence * 100).toFixed(2) : "N/A"}%)
-        </motion.p>
-      </div>
-    </div>
-  </div>
-  <div className="flex mt-4 space-x-4">
-    <a
-      href={finalLipsyncedLink}
-      download="final_video.webm"
-      className="inline-block px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-full shadow transition-colors duration-300"
-    >
-      Download Video
-    </a>
-    <button
-      onClick={resetAll}
-      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-full shadow transition-colors duration-300"
-    >
-      Reset
-    </button>
-  </div>
-</div>
-
+              <div className="relative p-4 h-full rounded-2xl overflow-hidden shadow-md w-full">
+                <div className="absolute h-full inset-0 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 opacity-30 blur-md"></div>
+                <div className="relative z-10 h-full bg-black bg-opacity-75 p-4 rounded-2xl border border-gray-700">
+                  <h3 className="text-3xl font-bold mb-3 text-center text-white drop-shadow-lg">
+                    Demographic Predictions
+                  </h3>
+                  <div className="flex flex-col space-y-4">
+                    <motion.p
+                      className="text-lg text-white"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4 }}
+                    >
+                      <span className="font-semibold">Race:</span> {demographics.predicted_race || "N/A"}{" "}
+                      ({demographics.race_confidence ? (demographics.race_confidence * 100).toFixed(2) : "N/A"}%)
+                    </motion.p>
+                    <motion.p
+                      className="text-lg text-white"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.7 }}
+                    >
+                      <span className="font-semibold">Ethnicity:</span> {demographics.predicted_ethnicity || "N/A"}{" "}
+                      ({demographics.ethnicity_confidence ? (demographics.ethnicity_confidence * 100).toFixed(2) : "N/A"}%)
+                    </motion.p>
+                    <motion.p
+                      className="text-lg text-white"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 1.0 }}
+                    >
+                      <span className="font-semibold">Gender:</span> {demographics.predicted_gender || "N/A"}{" "}
+                      ({demographics.gender_confidence ? (demographics.gender_confidence * 100).toFixed(2) : "N/A"}%)
+                    </motion.p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex mt-4 space-x-4">
+                <a
+                  href={finalLipsyncedLink}
+                  download="final_video.webm"
+                  className="inline-block px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-full shadow transition-colors duration-300"
+                >
+                  Download Video
+                </a>
+                <button
+                  onClick={resetAll}
+                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-full shadow transition-colors duration-300"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
           </div>
         </section>
       )}

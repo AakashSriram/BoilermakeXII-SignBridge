@@ -361,7 +361,6 @@ def upload_video():
         print("Converting .webm to .mp4 via ffmpeg...")
         mp4_filename = os.path.splitext(filename)[0] + ".mp4"
         mp4_file_path = os.path.join(UPLOAD_FOLDER, mp4_filename)
-
         ffmpeg_command = [
             "ffmpeg",
             "-y",
@@ -397,13 +396,11 @@ def upload_video():
     video_shareable_link = shareable_link
     print("Stored video link in global variable:", video_shareable_link)
 
-    converted_video_link = convert_drive_link(video_shareable_link)
-
+    # Check if audio has already been uploaded
     if audio_shareable_link:
+        converted_video_link = convert_drive_link(video_shareable_link)
         converted_audio_link = convert_drive_link(audio_shareable_link)
-        lipsynced_video_link = post_sync(
-            converted_video_link, converted_audio_link, actual_text
-        )
+        lipsynced_video_link = post_sync(converted_video_link, converted_audio_link, actual_text)
         return jsonify({
             "shareable_link": video_shareable_link,
             "final_lipsynced_link": lipsynced_video_link,
@@ -456,13 +453,10 @@ def upload_audio():
         wav_path = os.path.join(UPLOAD_FOLDER, wav_filename)
         tts.save(wav_path)
 
-        # Use the extracted demographic_gender variable instead of calling predict_gender again.
+        # Adjust pitch for male voice if applicable.
         if demographic_gender.lower() == "male":
             sound = AudioSegment.from_file(wav_path)
-            # Lower pitch and slow down slightly to simulate a male voice.
-            sound = sound._spawn(
-                sound.raw_data, overrides={"frame_rate": int(sound.frame_rate * 0.85)}
-            )
+            sound = sound._spawn(sound.raw_data, overrides={"frame_rate": int(sound.frame_rate * 0.85)})
             sound = sound.set_frame_rate(44100)
             sound.export(wav_path, format="wav")
 
@@ -473,13 +467,11 @@ def upload_audio():
         audio_shareable_link = shareable_link
         print("Stored audio link:", audio_shareable_link)
 
+        # Check if video has already been uploaded
         if video_shareable_link:
             converted_video_link = convert_drive_link(video_shareable_link)
             converted_audio_link = convert_drive_link(audio_shareable_link)
-            lipsynced_video_link = post_sync(
-                converted_video_link, converted_audio_link, actual_text
-            )
-
+            lipsynced_video_link = post_sync(converted_video_link, converted_audio_link, actual_text)
             return jsonify({
                 "shareable_link": audio_shareable_link,
                 "final_lipsynced_link": lipsynced_video_link,
@@ -569,7 +561,7 @@ def generate_sentence():
         if words is None:
             return jsonify({"error": "Missing 'words' key in JSON payload"}), 400
 
-        query = f"Convert these words into a coherent sentence: {words}. Just give me the sentence."
+        query = f"Convert these words into a coherent sentence OR if there are more than 5 words you can make it into multiple sentences: {words}. Just give me the sentence/sentences."
 
         response = client.models.generate_content(
             model="gemini-2.0-flash", contents=[query]
