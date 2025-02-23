@@ -19,7 +19,11 @@ ssl._create_default_https_context = ssl._create_unverified_context
 app = Flask(__name__)
 # Allow requests from http://localhost:3000
 
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+CORS(
+    app,
+    resources={r"/*": {"origins": "http://localhost:3000"}},
+    supports_credentials=True,
+)
 
 MODEL_PATH = "model.tflite"
 JSON_MAP_PATH = "sign_to_prediction_index_map.json"
@@ -99,7 +103,7 @@ def upload_file_to_drive(file_path: str, folder_id: str = None):
     return shareable_link
 
 
-@app.route("/upload", methods=["POST"])
+@app.route("/uploadvideo", methods=["POST"])
 def upload_video():
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
@@ -129,6 +133,42 @@ def upload_video():
         return jsonify({"shareable_link": shareable_link}), 200
 
     return jsonify({"error": "File upload failed"}), 500
+
+
+@app.route("/uploadaudio", methods=["POST", "OPTIONS"])
+def upload_audio():
+    if request.method == "OPTIONS":
+        response = jsonify({"message": "CORS preflight passed"})
+        response.status_code = 200  # ✅ Ensure response is HTTP 200 OK
+        return response
+
+    try:
+        data = request.get_json(force=True)
+        sentence = data.get("sentence")
+        print("Received sentence:", sentence)
+        if not sentence:
+            return jsonify({"error": "Missing 'sentence' key in JSON payload"}), 400
+
+        # Convert text to speech
+        tts = gTTS(text=sentence, lang="en")
+        audio_filename = "generated_audio.mp3"
+        audio_path = os.path.join(UPLOAD_FOLDER, audio_filename)
+
+        # Save the audio file
+        tts.save(audio_path)
+
+        # Upload to Google Drive
+        folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"
+        shareable_link = upload_file_to_drive(audio_path, folder_id)
+
+        # Remove the local file after uploading
+        os.remove(audio_path)
+
+        return jsonify({"shareable_link": shareable_link}), 200
+
+    except Exception as e:
+        print("Error during text-to-speech generation:", e)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/predict", methods=["POST", "OPTIONS"])
@@ -220,38 +260,3 @@ def generate_sentence():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
-
-@app.route("/uploadaudio", methods=["POST", "OPTIONS"])
-def upload_audio():
-    if request.method == "OPTIONS":
-        response = jsonify({"message": "CORS preflight passed"})
-        response.status_code = 200  # ✅ Ensure response is HTTP 200 OK
-        return response
-
-    try:
-        data = request.get_json(force=True)
-        sentence = data.get("sentence")
-        if not sentence:
-            return jsonify({"error": "Missing 'sentence' key in JSON payload"}), 400
-
-        # Convert text to speech
-        tts = gTTS(text=sentence, lang="en")
-        audio_filename = "generated_audio.mp3"
-        audio_path = os.path.join(UPLOAD_FOLDER, audio_filename)
-
-        # Save the audio file
-        tts.save(audio_path)
-
-        # Upload to Google Drive
-        folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"
-        shareable_link = upload_file_to_drive(audio_path, folder_id)
-
-        # Remove the local file after uploading
-        os.remove(audio_path)
-
-        return jsonify({"shareable_link": shareable_link}), 200
-
-    except Exception as e:
-        print("Error during text-to-speech generation:", e)
-        return jsonify({"error": str(e)}), 500
-

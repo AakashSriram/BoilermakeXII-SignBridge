@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Camera as IconCamera, Mic, Sun, Moon, Settings, Link2 } from "lucide-react";
 import { useAuth0 } from "@auth0/auth0-react";
 
-export default function SignBrige() {
+export default function SignBridge() {
     const { user } = useAuth0();
     const [isDarkMode, setIsDarkMode] = useState(true);
     const [isRecording, setIsRecording] = useState(false);
@@ -291,6 +291,9 @@ export default function SignBrige() {
 
             setTimeout(() => {
                 mediaRecorderRef.current?.stop();
+                if (generatedSentence) {
+                    uploadAudio(generatedSentence); // Upload sentence when video stops
+                }
             }, 1000); // Delay to ensure final chunks are processed
         } else {
             console.warn("MediaRecorder is not in a recording state.");
@@ -327,7 +330,7 @@ export default function SignBrige() {
         console.log("FormData created, uploading to backend...");
 
         try {
-            const response = await fetch("http://localhost:8000/upload", {
+            const response = await fetch("http://localhost:8000/uploadvideo", {
                 method: "POST",
                 body: formData,
             });
