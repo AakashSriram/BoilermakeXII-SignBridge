@@ -81,3 +81,4 @@ node_modules
 package-lock.json
 
 videos/
+video_metadata.json
