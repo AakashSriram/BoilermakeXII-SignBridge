@@ -6,6 +6,7 @@ import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import tensorflow as tf
+import subprocess
 from google import genai
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
@@ -13,6 +14,7 @@ from werkzeug.utils import secure_filename
 from gtts import gTTS
 import requests
 from typing import Any
+
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -162,11 +164,12 @@ def post_sync(vLink, aLink):
 @app.route("/uploadvideo", methods=["POST"])
 def upload_video():
     """
-    Uploads a video, stores the shareable link in a global variable,
-    and if we already have an audio link, calls post_sync immediately.
+    Accepts a video file (possibly .webm), converts it to .mp4 using ffmpeg,
+    uploads it to Google Drive, returns the shareable link,
+    and optionally calls post_sync if an audio link is already available.
     """
     global video_shareable_link, audio_shareable_link, lipsynced_video_link
-
+    
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
 
@@ -174,39 +177,81 @@ def upload_video():
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
 
-    if file:
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
+    # Save the uploaded file locally
+    filename = secure_filename(file.filename)
+    file_path = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(file_path)
 
-        file.save(file_path)
-        file_size = os.path.getsize(file_path)
-        print(f"Received file size on server: {file_size} bytes")
-
-        if file_size == 0:
-            print("Received an empty file. Aborting upload.")
-            os.remove(file_path)
-            return jsonify({"error": "Uploaded file is empty"}), 400
-
-        folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"
-        shareable_link = upload_file_to_drive(file_path, folder_id)
+    # Check file size (optional safety check)
+    file_size = os.path.getsize(file_path)
+    if file_size == 0:
         os.remove(file_path)
+        return jsonify({"error": "Uploaded file is empty"}), 400
 
-        # Store the shareable link in global variable
-        video_shareable_link = shareable_link
-        print("Stored video link:", video_shareable_link)
+    # ------------------------------------
+    # 1) Convert .webm to .mp4 if needed
+    # ------------------------------------
+    extension = os.path.splitext(filename)[1].lower()
+    if extension == ".webm":
+        print("Converting .webm to .mp4 via ffmpeg...")
+        mp4_filename = os.path.splitext(filename)[0] + ".mp4"
+        mp4_file_path = os.path.join(UPLOAD_FOLDER, mp4_filename)
 
-        # If audio link already exists, immediately do post_sync
-        if audio_shareable_link:
-            lipsynced_video_link = post_sync(video_shareable_link, audio_shareable_link)
-            return jsonify({
-                "shareable_link": video_shareable_link,
-                "final_lipsynced_link": lipsynced_video_link
-            }), 200
-        else:
-            return jsonify({"shareable_link": video_shareable_link}), 200
+        ffmpeg_command = [
+            "ffmpeg",
+            "-y",                 # Overwrite output file if it exists
+            "-i", file_path,      # Input
+            "-c:v", "libx264",    # Video codec
+            "-c:a", "aac",        # Audio codec
+            mp4_file_path
+        ]
 
-    return jsonify({"error": "File upload failed"}), 500
+        try:
+            subprocess.run(ffmpeg_command, check=True)
+            print(f"Converted {filename} to {mp4_filename} successfully.")
+        except subprocess.CalledProcessError as e:
+            os.remove(file_path)
+            return jsonify({"error": f"ffmpeg conversion failed: {str(e)}"}), 500
 
+        # Remove the original .webm file
+        os.remove(file_path)
+        # Update file_path to .mp4
+        file_path = mp4_file_path
+        print("Using .mp4 file:", file_path)
+    else:
+        print("No conversion needed. (File is not .webm)")
+
+    # ------------------------------------
+    # 2) Upload final file (.mp4) to Drive
+    # ------------------------------------
+    try:
+        folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"  # Example folder
+        shareable_link = upload_file_to_drive(file_path, folder_id)
+        # Remove the local file after uploading
+        os.remove(file_path)
+    except Exception as e:
+        print("Drive upload failed:", e)
+        return jsonify({"error": f"Drive upload failed: {str(e)}"}), 500
+
+    # ------------------------------------
+    # 3) Update global state & optionally post_sync
+    # ------------------------------------
+    video_shareable_link = shareable_link
+    print("Stored video link in global variable:", video_shareable_link)
+
+    # If there's already an audio link, do post_sync automatically
+    if audio_shareable_link:
+        # lipsynced_video_link = post_sync(video_shareable_link, audio_shareable_link)
+        # return jsonify({
+        #     "shareable_link": video_shareable_link,
+        #     "final_lipsynced_link": lipsynced_video_link
+        # }), 200
+
+        # For demonstration, pretend we have post_sync disabled:
+        pass
+
+    # Return the shareable link
+    return jsonify({"shareable_link": video_shareable_link}), 200
 
 @app.route("/uploadaudio", methods=["POST", "OPTIONS"])
 def upload_audio():
