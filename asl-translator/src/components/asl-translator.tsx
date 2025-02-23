@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Camera as IconCamera, Mic, Sun, Moon, Settings, Link2 } from "lucide-react";
+import { Camera as IconCamera, Sun, Moon, Settings, Link2 } from "lucide-react";
 import { useAuth0 } from "@auth0/auth0-react";
 
 export default function SignBridge() {
@@ -14,7 +14,7 @@ export default function SignBridge() {
   const [detectedTexts, setDetectedTexts] = useState<string[]>([]);
   const [generatedSentence, setGeneratedSentence] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  // New state to store the final lipsynced link.
+  // State to store the final lipsynced video URL
   const [finalLipsyncedLink, setFinalLipsyncedLink] = useState("");
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -23,7 +23,6 @@ export default function SignBridge() {
   const holisticRef = useRef<any>(null);
   const cameraInstanceRef = useRef<any>(null);
 
-  // Adds a new detected word if the array has less than 5 items.
   const addDetectedText = (text: string) => {
     setDetectedTexts((prev) => {
       if (!text || text === "No signs detected" || prev.length >= 5 || prev.includes(text)) {
@@ -37,11 +36,11 @@ export default function SignBridge() {
     setDetectedTexts((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Initialize MediaPipe Holistic from the global window object (via CDN)
   useEffect(() => {
     if (typeof window !== "undefined" && window.Holistic) {
       const holistic = new window.Holistic({
-        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`,
+        locateFile: (file: string) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`,
       });
       holistic.setOptions({
         modelComplexity: 1,
@@ -56,7 +55,6 @@ export default function SignBridge() {
     }
   }, []);
 
-  // Helper: extracts landmarks and fills missing entries.
   const extract = (landmarks: any, count: number) => {
     if (!landmarks || landmarks.length === 0) {
       return Array(count).fill({ x: 0, y: 0, z: 0 });
@@ -68,7 +66,6 @@ export default function SignBridge() {
     return landmarks.slice(0, count);
   };
 
-  // Process MediaPipe results
   const onResults = (results: any) => {
     const faceLandmarks = extract(results.faceLandmarks, 468);
     const poseLandmarks = extract(results.poseLandmarks, 33);
@@ -129,7 +126,6 @@ export default function SignBridge() {
     }
   };
 
-  // Send accumulated landmark frames to the backend for prediction.
   const sendLandmarks = async (frames: number[][][]) => {
     try {
       const response = await fetch("http://localhost:8000/predict", {
@@ -151,7 +147,6 @@ export default function SignBridge() {
     }
   };
 
-  // Toggle recording: start/stop camera feed & processing.
   const toggleRecording = () => {
     if (!isRecording) {
       if (videoRef.current && holisticRef.current && window.Camera) {
@@ -166,9 +161,7 @@ export default function SignBridge() {
         cameraInstanceRef.current = camera;
         startRecording();
       } else {
-        console.error(
-          "Camera initialization error. Ensure the video element is mounted and window.Camera is defined."
-        );
+        console.error("Camera initialization error. Ensure the video element is mounted and window.Camera is defined.");
       }
     } else {
       if (cameraInstanceRef.current) {
@@ -179,7 +172,6 @@ export default function SignBridge() {
     setIsRecording((prev) => !prev);
   };
 
-  // Start video recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -273,7 +265,6 @@ export default function SignBridge() {
     console.log("Recording and camera stopped");
   };
 
-  // Updated function to capture the final lipsynced link.
   const uploadVideoToBackend = async (blob: Blob) => {
     const formData = new FormData();
     formData.append("file", blob, "recorded_video.webm");
@@ -296,7 +287,6 @@ export default function SignBridge() {
     }
   };
 
-  // Generate a coherent sentence using the accumulated words.
   const handleGenerateSentence = async () => {
     if (detectedTexts.length !== 5) {
       console.warn("Need exactly 5 words to generate a sentence.");
@@ -326,7 +316,6 @@ export default function SignBridge() {
   };
 
   return (
-    // Updated top-level container: Using min-h-screen with overflow controls
     <div
       className={`min-h-screen overflow-y-auto overflow-x-hidden font-sans flex flex-col ${
         isDarkMode
@@ -341,10 +330,7 @@ export default function SignBridge() {
           <span className="text-2xl font-extrabold tracking-widest">SignBridge</span>
         </div>
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-2 rounded-full hover:bg-gray-700 transition-colors"
-          >
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full hover:bg-gray-700 transition-colors">
             {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
           </button>
           <button className="p-2 rounded-full hover:bg-gray-700 transition-colors">
@@ -352,11 +338,7 @@ export default function SignBridge() {
           </button>
           {user && (
             <div className="flex items-center gap-2">
-              <img
-                src={user.picture}
-                alt={user.name}
-                className="w-10 h-10 rounded-full border-2 border-blue-400"
-              />
+              <img src={user.picture} alt={user.name} className="w-10 h-10 rounded-full border-2 border-blue-400" />
               <span className="text-lg font-medium">{user.name}</span>
             </div>
           )}
@@ -365,7 +347,7 @@ export default function SignBridge() {
 
       {/* Main Content: Two-column layout */}
       <main className="flex flex-grow flex-col lg:flex-row items-center justify-center p-4">
-        {/* Left: Enlarged Camera Feed */}
+        {/* Left: Camera Feed */}
         <div className="w-full lg:w-1/2 p-2 flex justify-center">
           <div className="relative w-full max-w-3xl rounded-3xl overflow-hidden shadow-2xl">
             <video
@@ -384,7 +366,7 @@ export default function SignBridge() {
           </div>
         </div>
 
-        {/* Right: Prediction Card, Controls, History & Sentence Generation */}
+        {/* Right: Controls and Predictions */}
         <div className="w-full lg:w-1/2 p-2 flex flex-col items-center justify-center">
           <div className="bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-8 shadow-xl w-full max-w-md mb-6">
             <h2 className="text-xl font-semibold mb-4 text-center">Detected Sign</h2>
@@ -401,10 +383,7 @@ export default function SignBridge() {
                 {detectedTexts.map((text, index) => (
                   <li key={index} className="flex items-center justify-between bg-gray-700 rounded-lg p-2">
                     <span>{text}</span>
-                    <button
-                      onClick={() => removeDetectedText(index)}
-                      className="text-sm text-red-400 hover:text-red-600"
-                    >
+                    <button onClick={() => removeDetectedText(index)} className="text-sm text-red-400 hover:text-red-600">
                       Remove
                     </button>
                   </li>
@@ -415,7 +394,7 @@ export default function SignBridge() {
             )}
           </div>
 
-          {/* Sentence Generation Section */}
+          {/* Sentence Generation */}
           <div className="w-full max-w-md bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
             <h3 className="text-lg font-semibold mb-2 text-center">Generate Sentence</h3>
             <p className="mb-4 text-center text-sm text-gray-300">
@@ -439,20 +418,30 @@ export default function SignBridge() {
         </div>
       </main>
 
-      {/* Redesigned Final Lipsynced Video Section */}
+      {/* Extended Section for Final Lipsynced Video */}
       {finalLipsyncedLink && (
-        <div className="w-full max-w-3xl mx-auto p-4">
-          <div className="bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-6 shadow-xl">
-            <h3 className="text-xl font-semibold mb-4 text-center">Final Lipsynced Video</h3>
+        <section className="min-h-screen w-full flex items-center justify-center p-4">
+          <div className="w-full max-w-5xl bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl shadow-xl p-8">
+            <h3 className="text-2xl font-semibold mb-6 text-center">Final Lipsynced Video</h3>
             <div className="relative pb-[56.25%]">
               <video
                 src={finalLipsyncedLink}
                 controls
-                className="absolute top-0 left-0 w-full h-full rounded-2xl object-cover"
+                autoPlay
+                className="absolute top-0 left-0 w-full h-full object-contain rounded-2xl"
               />
             </div>
+            <div className="mt-6 flex justify-center">
+              <a
+                href={finalLipsyncedLink}
+                download="final_video.webm"
+                className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full shadow-lg"
+              >
+                Download Video
+              </a>
+            </div>
           </div>
-        </div>
+        </section>
       )}
     </div>
   );
