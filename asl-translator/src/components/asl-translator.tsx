@@ -22,14 +22,22 @@ export default function SignBrige() {
   const [generatedSentence, setGeneratedSentence] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Refs for video processing and MediaRecorder
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const holisticRef = useRef<any>(null);
+  const cameraInstanceRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunks = useRef<Blob[]>([]);
+
   // Adds a new detected word if the array has less than 5 items.
   const addDetectedText = (text: string) => {
     setDetectedTexts((prev) => {
-      // Return previous state if:
-      // - text is empty or a placeholder (e.g., "No signs detected")
-      // - the array already has 5 entries
-      // - the text already exists in the array
-      if (!text || text === "No signs detected" || prev.length >= 5 || prev.includes(text)) {
+      if (
+        !text ||
+        text === "No signs detected" ||
+        prev.length >= 5 ||
+        prev.includes(text)
+      ) {
         return prev;
       }
       return [...prev, text];
@@ -39,10 +47,6 @@ export default function SignBrige() {
   const removeDetectedText = (index: number) => {
     setDetectedTexts((prev) => prev.filter((_, i) => i !== index));
   };
-
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const holisticRef = useRef<any>(null);
-  const cameraInstanceRef = useRef<any>(null);
 
   // Initialize MediaPipe Holistic from the global window object (via CDN)
   useEffect(() => {
@@ -84,34 +88,24 @@ export default function SignBrige() {
 
   // Process MediaPipe results
   const onResults = (results: any) => {
-    // Extract face and pose landmarks as usual.
     const faceLandmarks = extract(results.faceLandmarks, 468);
     const poseLandmarks = extract(results.poseLandmarks, 33);
-
-    // Extract left-hand landmarks.
     let leftHandLandmarks = extract(results.leftHandLandmarks, 21);
-    // Extract right-hand landmarks (without flipping yet)
     const rightHandRaw = extract(results.rightHandLandmarks, 21);
 
-    // Check if left-hand landmarks are effectively "empty"
     const leftIsEmpty = leftHandLandmarks.every(
       (lm: any) => lm.x === 0 && lm.y === 0 && lm.z === 0
     );
 
     let rightHandLandmarks;
     if (leftIsEmpty) {
-      // If left-hand is empty, assume sign is done with right hand.
-      // Flip right-hand landmarks and assign them to the left-hand slot.
       leftHandLandmarks = rightHandRaw.map((lm: any) => ({
-        x: 1 - lm.x, // horizontal flip
+        x: 1 - lm.x,
         y: lm.y,
         z: lm.z,
       }));
-      // Optionally, set the right-hand slot to zeros.
       rightHandLandmarks = Array(21).fill({ x: 0, y: 0, z: 0 });
     } else {
-      // Otherwise, assume left-hand sign is being used.
-      // Flip right-hand landmarks for consistency.
       rightHandLandmarks = rightHandRaw.map((lm: any) => ({
         x: 1 - lm.x,
         y: lm.y,
@@ -119,7 +113,6 @@ export default function SignBrige() {
       }));
     }
 
-    // Combine landmarks in order: face, left hand, pose, right hand.
     const landmarks = [
       ...faceLandmarks.map((lm: any) => [lm.x, lm.y, lm.z]),
       ...leftHandLandmarks.map((lm: any) => [lm.x, lm.y, lm.z]),
@@ -164,10 +157,34 @@ export default function SignBrige() {
     }
   };
 
-  // Toggle recording: start/stop camera feed & processing.
-  const toggleRecording = () => {
+  // Helper: Get a valid stream for recording.
+  const getValidStream = async () => {
+    // Attempt to use the existing srcObject or captureStream (or prefixed version)
+    let stream =
+      videoRef.current?.srcObject ||
+      videoRef.current?.captureStream?.() ||
+      videoRef.current?.webkitCaptureStream?.();
+
+    // Check if the stream has a video track
+    if (!stream || stream.getVideoTracks().length === 0) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.error("Error getting media stream:", err);
+        return null;
+      }
+    }
+    return stream;
+  };
+
+  // Toggle recording: start/stop camera feed, processing, and a 5-second video capture.
+  const toggleRecording = async () => {
     if (!isRecording) {
       if (videoRef.current && holisticRef.current && window.Camera) {
+        // Start MediaPipe camera processing.
         const camera = new window.Camera(videoRef.current, {
           onFrame: async () => {
             await holisticRef.current.send({ image: videoRef.current });
@@ -177,6 +194,60 @@ export default function SignBrige() {
         });
         camera.start();
         cameraInstanceRef.current = camera;
+
+        // Ensure we have a valid media stream.
+        const stream = await getValidStream();
+        if (!stream) {
+          console.error("Unable to obtain a valid media stream.");
+          return;
+        }
+
+        try {
+          const mediaRecorder = new MediaRecorder(stream, {
+            mimeType: "video/webm",
+          });
+          recordedChunks.current = [];
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              recordedChunks.current.push(event.data);
+            }
+          };
+          mediaRecorder.onstop = async () => {
+            const blob = new Blob(recordedChunks.current, {
+              type: "video/webm",
+            });
+            const file = new File([blob], "recorded_video.webm", {
+              type: "video/webm",
+            });
+            const formData = new FormData();
+            formData.append("video", file);
+            try {
+              const response = await fetch("http://localhost:8000/upload_video", {
+                method: "POST",
+                body: formData,
+              });
+              const data = await response.json();
+              if (data.message) {
+                console.log("Video upload successful:", data.message);
+              } else {
+                console.error("Video upload error:", data.error);
+              }
+            } catch (error) {
+              console.error("Error uploading video:", error);
+            }
+          };
+          mediaRecorder.start();
+          mediaRecorderRef.current = mediaRecorder;
+
+          // Automatically stop recording after 5 seconds.
+          setTimeout(() => {
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+              mediaRecorderRef.current.stop();
+            }
+          }, 5000);
+        } catch (error) {
+          console.error("MediaRecorder initialization error:", error);
+        }
       } else {
         console.error(
           "Camera initialization error. Ensure the video element is mounted and window.Camera is defined."
@@ -287,18 +358,6 @@ export default function SignBrige() {
             <p className="text-2xl tracking-wider text-center">
               {detectedText || "Waiting for prediction..."}
             </p>
-          </div>
-          <div className="flex gap-4 mb-6">
-            <button
-              onClick={() => setDetectedText("")}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 transition-colors rounded-full shadow-md text-sm"
-            >
-              Clear Text
-            </button>
-            <button className="px-4 py-2 bg-green-600 hover:bg-green-700 transition-colors rounded-full shadow-md flex items-center gap-2 text-sm">
-              <Mic size={16} />
-              Speak Text
-            </button>
           </div>
           {/* Detected Signs History */}
           <div className="w-full max-w-md bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-4 shadow-xl mb-6">

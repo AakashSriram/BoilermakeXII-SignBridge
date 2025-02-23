@@ -6,6 +6,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import tensorflow as tf
 from google import genai  # Import the Google Generative AI client
+from werkzeug.utils import secure_filename
+from pydrive2.auth import GoogleAuth
+from pydrive2.drive import GoogleDrive
 
 app = Flask(__name__)
 # Allow requests from http://localhost:3000
@@ -99,7 +102,7 @@ def generate_sentence():
             return jsonify({"error": "Missing 'words' key in JSON payload"}), 400
 
         # Build the prompt for Gemini.
-        query = f"Convert these words into a coherent sentence: {words}"
+        query = f"Convert these words into a coherent sentence: {words}. Just give me the sentence. Make it sound normal."
 
         # Call the Gemini 2.0flash model via the client.
         response = client.models.generate_content(
@@ -114,6 +117,64 @@ def generate_sentence():
     except Exception as e:
         print("Error during sentence generation:", e)
         return jsonify({"error": str(e)}), 500
+
+# --- New endpoint for uploading video ---
+
+@app.route('/upload_video', methods=['POST', 'OPTIONS'])
+def upload_video():
+    if request.method == "OPTIONS":
+        return app.make_default_options_response()
+    try:
+        if 'video' not in request.files:
+            return jsonify({"error": "No video file in the request"}), 400
+
+        video_file = request.files['video']
+        if video_file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+
+        # Secure the filename and save locally
+        filename = secure_filename(video_file.filename)
+        local_path = os.path.join(os.getcwd(), filename)
+        video_file.save(local_path)
+        print(f"Video saved locally at {local_path}")
+
+        # Path to the service account credentials file.
+        service_account_file = 'service_account_credentials.json'
+        if not os.path.exists(service_account_file):
+            error_msg = f"Service account credentials file '{service_account_file}' does not exist."
+            print(error_msg)
+            return jsonify({"error": error_msg}), 500
+
+        # Load the service account credentials JSON.
+        # Load the service account credentials JSON.
+        with open(service_account_file, 'r') as f:
+            client_json = json.load(f)
+
+        # Use service account for authentication with PyDrive2.
+        gauth = GoogleAuth()
+        gauth.settings['client_config_backend'] = 'service'
+        # Provide the credentials using both keys.
+        gauth.settings['client_json_dict'] = client_json
+        gauth.settings['service_config'] = client_json
+        gauth.ServiceAuth()  # Authenticate using the service account
+
+
+        drive = GoogleDrive(gauth)
+
+        # Create and upload the file to Google Drive.
+        drive_file = drive.CreateFile({'title': filename})
+        drive_file.SetContentFile(local_path)
+        drive_file.Upload()
+        print(f"Video uploaded to Google Drive with file ID: {drive_file['id']}")
+
+        return jsonify({
+            "message": "Video uploaded successfully to Google Drive",
+            "drive_file_id": drive_file['id']
+        })
+    except Exception as e:
+        print("Error during video upload:", e)
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=8000)
