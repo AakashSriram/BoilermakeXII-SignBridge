@@ -112,7 +112,8 @@ export default function SignBridge() {
       const response = await fetch("http://localhost:8000/uploadaudio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sentence }),
+        // Include user.name in the payload along with the sentence
+        body: JSON.stringify({ sentence, name: user.name }),
         credentials: "include",
       });
       if (response.ok) {
@@ -125,6 +126,7 @@ export default function SignBridge() {
       console.error("Error uploading audio:", error);
     }
   };
+  
 
   const sendLandmarks = async (frames: number[][][]) => {
     try {

@@ -360,10 +360,11 @@ def upload_video():
 
 
 @app.route("/uploadaudio", methods=["POST", "OPTIONS"])
+@app.route("/uploadaudio", methods=["POST", "OPTIONS"])
 def upload_audio():
     """
-    1. Receives text in JSON payload.
-    2. Generates MP3 via gTTS.
+    1. Receives text and name in JSON payload.
+    2. Generates MP3 via gTTS using a voice based on the provided name.
     3. Converts MP3 to WAV via ffmpeg.
     4. Uploads the WAV to Google Drive, then removes local files.
     5. If a video link is already stored, calls post_sync automatically.
@@ -378,51 +379,30 @@ def upload_audio():
     try:
         data = request.get_json(force=True)
         sentence = data.get("sentence")
+        # Get the user's name from the payload; if not provided, default to "default"
+        name = data.get("name", "default")
         if not sentence:
             return jsonify({"error": "Missing 'sentence' key in JSON payload"}), 400
 
-        # Store globally so we can pass to post_sync
+        # Store the sentence globally
         actual_text = sentence
-        print("Received sentence:", sentence)
+        print("Received sentence:", sentence, "for user:", name)
 
-        # Generate WAV from text
+        # Generate WAV from text using a voice based on the user's name
         tts = gTTS(text=sentence, lang="en", tld=choose_voice(name))
         wav_filename = "generated_audio.wav"
         wav_path = os.path.join(UPLOAD_FOLDER, wav_filename)
         tts.save(wav_path)
 
+        # Adjust the pitch if the predicted gender is male
         if predict_gender(name).lower() == "male":
             sound = AudioSegment.from_file(wav_path)
-            # Lower pitch to simulate a male voice (slows down the speed slightly too)
+            # Lower pitch (and slow down slightly) to simulate a male voice
             sound = sound._spawn(
                 sound.raw_data, overrides={"frame_rate": int(sound.frame_rate * 0.85)}
             )
             sound = sound.set_frame_rate(44100)
             sound.export(wav_path, format="wav")
-
-        # # Convert MP3 to WAV using ffmpeg
-        # wav_filename = "generated_audio.wav"
-        # wav_path = os.path.join(UPLOAD_FOLDER, wav_filename)
-        # ffmpeg_command = [
-        #     "ffmpeg",
-        #     "-y",
-        #     "-i",
-        #     wav_path,
-        #     "-acodec",
-        #     "pcm_s16le",
-        #     "-ar",
-        #     "44100",
-        #     wav_path,
-        # ]
-        # try:
-        #     subprocess.run(ffmpeg_command, check=True)
-        #     print(f"Converted {wav_filename} to {wav_filename} successfully.")
-        # except subprocess.CalledProcessError as e:
-        #     os.remove(wav_path)
-        #     return jsonify({"error": f"ffmpeg conversion failed: {str(e)}"}), 500
-
-        # Remove the original WAV
-        # os.remove(wav_path)
 
         # Upload the WAV file to Google Drive
         folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"
@@ -432,7 +412,7 @@ def upload_audio():
         audio_shareable_link = shareable_link
         print("Stored audio link:", audio_shareable_link)
 
-        # If a video link already exists, do lipsync
+        # If a video link already exists, perform lipsync
         if video_shareable_link:
             converted_video_link = convert_drive_link(video_shareable_link)
             converted_audio_link = convert_drive_link(audio_shareable_link)
