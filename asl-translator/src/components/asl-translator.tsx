@@ -4,9 +4,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { Camera as IconCamera, Sun, Moon, Settings, Link2 } from "lucide-react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { motion } from "framer-motion";
+import { FaAmericanSignLanguageInterpreting } from "react-icons/fa"
+
+
 
 export default function SignBridge() {
     const finalVideoRef = useRef(null);
+// Use a ref to track removed signs for immediate updates
+    const removedSignsRef = useRef<string[]>([]); 
 
     const [demographics, setDemographics] = useState({
         predicted_race: "",
@@ -41,16 +46,31 @@ export default function SignBridge() {
     }, [finalLipsyncedLink]);
 
     const addDetectedText = (text: string) => {
-        setDetectedTexts((prev) => {
-            if (!text || text === "No signs detected" || prev.length >= 5 || prev.includes(text)) {
-                return prev;
-            }
-            return [...prev, text];
-        });
+      setDetectedTexts((prev) => {
+        // Only add if text is valid, not already in the current list,
+        // not in the removed signs (using the ref), and if we haven't reached 5 words
+        if (
+          !text ||
+          text === "No signs detected" ||
+          prev.length >= 5 ||
+          prev.includes(text) ||
+          removedSignsRef.current.includes(text)
+        ) {
+          return prev;
+        }
+        return [...prev, text];
+      });
     };
 
     const removeDetectedText = (index: number) => {
-        setDetectedTexts((prev) => prev.filter((_, i) => i !== index));
+      setDetectedTexts((prev) => {
+        const removed = prev[index];
+        if (removed) {
+          // Immediately update the ref
+          removedSignsRef.current = [...removedSignsRef.current, removed];
+        }
+        return prev.filter((_, i) => i !== index);
+      });
     };
 
     useEffect(() => {
@@ -358,17 +378,17 @@ export default function SignBridge() {
         >
             {/* Navbar */}
             <nav className="flex items-center justify-between px-6 py-4 border-b border-gray-500">
-                <div className="flex items-center gap-2">
-                    <Link2 size={28} className="text-blue-400" />
-                    <span className="text-2xl font-extrabold tracking-widest">SignBridge</span>
-                </div>
+            <div className="flex items-center gap-4">
+  <div className="flex items-center justify-center p-4 bg-gradient-to-br from-purple-800 to-blue-900 rounded-full shadow-md hover:shadow-lg transition-all duration-300">
+    <FaAmericanSignLanguageInterpreting size={30} className="text-gray-300" />
+  </div>
+  <span className="text-3xl font-light tracking-wide text-white drop-shadow-md" style={{ fontFamily: "Poppins, sans-serif" }}>
+    SignBridge
+  </span>
+</div>
+
                 <div className="flex items-center gap-4">
-                    <button
-                        onClick={() => setIsDarkMode(!isDarkMode)}
-                        className="p-2 rounded-full hover:bg-gray-600 transition-colors shadow-lg bg-opacity-30"
-                    >
-                        {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
-                    </button>
+
                     <button className="p-2 rounded-full hover:bg-gray-700 transition-colors">
                         <Settings size={24} />
                     </button>
