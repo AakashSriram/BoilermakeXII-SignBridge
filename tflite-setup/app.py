@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import threading
 import numpy as np
 from flask import Flask, request, jsonify
@@ -10,15 +11,14 @@ from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 from werkzeug.utils import secure_filename
 from gtts import gTTS
-
+import requests
+from typing import Any
 
 import ssl
-
 ssl._create_default_https_context = ssl._create_unverified_context
 
 app = Flask(__name__)
 # Allow requests from http://localhost:3000
-
 CORS(
     app,
     resources={r"/*": {"origins": "http://localhost:3000"}},
@@ -36,13 +36,15 @@ print("Current working directory:", os.getcwd())
 # Global lock for thread-safe TFLite inference
 inference_lock = threading.Lock()
 
-# Load the TFLite model.
+# -------------------------
+# LOAD TFLITE MODEL
+# -------------------------
 try:
     interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
     interpreter.allocate_tensors()
     try:
         predict_fn = interpreter.get_signature_runner("serving_default")
-    except Exception as e:
+    except Exception:
         predict_fn = None
         print("Signature runner not available; falling back to manual invocation.")
 except Exception as e:
@@ -51,15 +53,23 @@ except Exception as e:
 
 with open(JSON_MAP_PATH, "r") as f:
     s2p_map = json.load(f)
+
+# Lowercase the keys
 s2p_map = {k.lower(): v for k, v in s2p_map.items()}
 p2s_map = {v: k for k, v in s2p_map.items()}
 
+# -------------------------
+# GLOBAL VARIABLES
+# -------------------------
+video_shareable_link = None
+audio_shareable_link = None
+lipsynced_video_link = None  # Will store the final Sync.so lipsynced video link
 
-# Authenticate using a Service Account
+# -------------------------
+# GOOGLE DRIVE AUTH & UPLOAD
+# -------------------------
 def authenticate_service_account():
     gauth = GoogleAuth()
-
-    # Configure the settings for the service account
     gauth.settings = {
         "client_config_backend": "service",
         "service_config": {
@@ -72,11 +82,8 @@ def authenticate_service_account():
             "https://www.googleapis.com/auth/drive.appdata",
         ],
     }
-
-    # Authenticate with the service account
     gauth.ServiceAuth()
     return GoogleDrive(gauth)
-
 
 def upload_file_to_drive(file_path: str, folder_id: str = None):
     drive = authenticate_service_account()
@@ -89,22 +96,77 @@ def upload_file_to_drive(file_path: str, folder_id: str = None):
     if folder_id:
         file_metadata["parents"] = [{"id": folder_id}]
 
-    file = drive.CreateFile(file_metadata)
-    file.SetContentFile(file_path)
+    drive_file = drive.CreateFile(file_metadata)
+    drive_file.SetContentFile(file_path)
 
     try:
-        file.Upload({"convert": True})
+        drive_file.Upload({"convert": True})
         print(f"Successfully uploaded {file_name} to Google Drive.")
     except Exception as e:
         print(f"Failed to upload file: {e}")
 
-    file_id = file["id"]
+    file_id = drive_file["id"]
     shareable_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
     return shareable_link
 
+# -------------------------
+# SYNC FUNCTIONS
+# -------------------------
+def get_sync(job_id):
+    while True:
+        url = f"https://api.sync.so/v2/generate/{job_id}"
+        headers = {
+            "x-api-key": "sk-s7q39wHaSkqBbkVWRt251g.nDL7ibVAWrjWb2mVOG5f6GrXJuSTdMOf"
+        }
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("outputUrl") is not None:
+                return data["outputUrl"]
+        else:
+            print(f"Failed to fetch job status: {response.text}")
+
+        time.sleep(5)  # Check every 5 seconds for the outputUrl
+
+def post_sync(vLink, aLink):
+    url = "https://api.sync.so/v2/generate"
+    payload = {
+        "model": "lipsync-1.9.0-beta",
+        "input": [
+            {"type": "video", "url": vLink},
+            {"type": "audio", "url": aLink}
+        ]
+    }
+    headers = {
+        "x-api-key": "sk-JFVWXbkcQcmlcwH25jGONw.D_T1qHvmbCJ_s_nUDa1Yyk4YW7f4luGA",
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(url, json=payload, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        job_id = data.get("id")
+        # Now wait for the final lipsynced URL
+        video_link = get_sync(job_id)
+        print("Lipsynced video link:", video_link)
+        return video_link
+    else:
+        print("Failed to fetch job status:", response.text)
+        return None
+
+# -------------------------
+# FLASK ENDPOINTS
+# -------------------------
 
 @app.route("/uploadvideo", methods=["POST"])
 def upload_video():
+    """
+    Uploads a video, stores the shareable link in a global variable,
+    and if we already have an audio link, calls post_sync immediately.
+    """
+    global video_shareable_link, audio_shareable_link, lipsynced_video_link
+
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
 
@@ -127,25 +189,44 @@ def upload_video():
 
         folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"
         shareable_link = upload_file_to_drive(file_path, folder_id)
-
         os.remove(file_path)
 
-        return jsonify({"shareable_link": shareable_link}), 200
+        # Store the shareable link in global variable
+        video_shareable_link = shareable_link
+        print("Stored video link:", video_shareable_link)
+
+        # If audio link already exists, immediately do post_sync
+        if audio_shareable_link:
+            lipsynced_video_link = post_sync(video_shareable_link, audio_shareable_link)
+            return jsonify({
+                "shareable_link": video_shareable_link,
+                "final_lipsynced_link": lipsynced_video_link
+            }), 200
+        else:
+            return jsonify({"shareable_link": video_shareable_link}), 200
 
     return jsonify({"error": "File upload failed"}), 500
 
 
 @app.route("/uploadaudio", methods=["POST", "OPTIONS"])
 def upload_audio():
+    """
+    Generates audio (via TTS) or receives an uploaded audio file,
+    stores the shareable link, and if we already have a video link,
+    calls post_sync immediately.
+    """
+    global audio_shareable_link, video_shareable_link, lipsynced_video_link
+
     if request.method == "OPTIONS":
         response = jsonify({"message": "CORS preflight passed"})
-        response.status_code = 200  # ✅ Ensure response is HTTP 200 OK
+        response.status_code = 200  # Ensure response is HTTP 200 OK
         return response
 
     try:
         data = request.get_json(force=True)
         sentence = data.get("sentence")
         print("Received sentence:", sentence)
+
         if not sentence:
             return jsonify({"error": "Missing 'sentence' key in JSON payload"}), 400
 
@@ -160,11 +241,21 @@ def upload_audio():
         # Upload to Google Drive
         folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"
         shareable_link = upload_file_to_drive(audio_path, folder_id)
-
-        # Remove the local file after uploading
         os.remove(audio_path)
 
-        return jsonify({"shareable_link": shareable_link}), 200
+        # Store the shareable link in global variable
+        audio_shareable_link = shareable_link
+        print("Stored audio link:", audio_shareable_link)
+
+        # If video link already exists, immediately do post_sync
+        if video_shareable_link:
+            lipsynced_video_link = post_sync(video_shareable_link, audio_shareable_link)
+            return jsonify({
+                "shareable_link": audio_shareable_link,
+                "final_lipsynced_link": lipsynced_video_link
+            }), 200
+        else:
+            return jsonify({"shareable_link": audio_shareable_link}), 200
 
     except Exception as e:
         print("Error during text-to-speech generation:", e)
@@ -175,6 +266,7 @@ def upload_audio():
 def predict():
     if request.method == "OPTIONS":
         return app.make_default_options_response()
+
     try:
         data = request.get_json(force=True)
         frames = data.get("frames")
@@ -183,14 +275,9 @@ def predict():
 
         input_data = np.array(frames, dtype=np.float32)
         if input_data.ndim != 3 or input_data.shape[1:] != (543, 3):
-            return (
-                jsonify(
-                    {
-                        "error": f"Invalid input shape: expected (N, 543, 3), got {input_data.shape}"
-                    }
-                ),
-                400,
-            )
+            return jsonify({
+                "error": f"Invalid input shape: expected (N, 543, 3), got {input_data.shape}"
+            }), 400
 
         with inference_lock:
             if predict_fn:
@@ -208,28 +295,27 @@ def predict():
         max_confidence = float(np.max(preds))
         predicted_sign = p2s_map.get(predicted_index, "Unknown")
 
+        # Example: If "lion" was a placeholder for "no sign," handle that:
         if predicted_sign.lower() == "lion":
             predicted_sign = "No sign detected"
 
         return jsonify({"predicted_sign": predicted_sign, "confidence": max_confidence})
+
     except Exception as e:
         print("Error during prediction:", e)
         return jsonify({"error": str(e)}), 500
 
 
-# --- Google Generative AI (Gemini 2.0flash) Setup ---
-
-# For security, store your API key in an environment variable.
+# -------------------------
+# GOOGLE GENERATIVE AI (GEMINI 2.0-FLASH)
+# -------------------------
 GEN_AI_API_KEY = os.environ.get(
     "GEN_AI_API_KEY", "AIzaSyDceXe1mqRSvkafKu2f5UvbZ2C867ZDqUA"
 )
-
 if not GEN_AI_API_KEY:
     raise Exception("Please set the GEN_AI_API_KEY environment variable.")
 
-# Instantiate the client.
 client = genai.Client(api_key=GEN_AI_API_KEY)
-
 
 @app.route("/generate_sentence", methods=["POST", "OPTIONS"])
 def generate_sentence():
@@ -241,16 +327,12 @@ def generate_sentence():
         if words is None:
             return jsonify({"error": "Missing 'words' key in JSON payload"}), 400
 
-        # Build the prompt for Gemini.
         query = f"Convert these words into a coherent sentence: {words}. Just give me the sentence. Make it sound normal."
 
-        # Call the Gemini 2.0flash model via the client.
         response = client.models.generate_content(
             model="gemini-2.0-flash", contents=[query]
         )
-
-        # Assume the response object has a 'text' attribute.
-        sentence = response.text
+        sentence = response.text  # Assumes the response object has a `.text` attribute
 
         return jsonify({"sentence": sentence})
     except Exception as e:
