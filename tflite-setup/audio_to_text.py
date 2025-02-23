@@ -1,12 +1,14 @@
 # Python program to translate
 # speech to text and text to speech
 import speech_recognition as sr
-import pyttsx3 
+import pyttsx3
+
 
 def SpeakText(command):
     engine = pyttsx3.init()
-    engine.say(command) 
+    engine.say(command)
     engine.runAndWait()
+
 
 def listen_for_speech():
     r = sr.Recognizer()
@@ -18,14 +20,15 @@ def listen_for_speech():
             MyText = MyText.lower()
             print(MyText)
             return MyText
-            
+
     except sr.RequestError as e:
-        #print("Could not request results; {0}".format(e))
+        # print("Could not request results; {0}".format(e))
         return None
-        
+
     except sr.UnknownValueError:
-        #print("unknown error occurred")
+        # print("unknown error occurred")
         return None
+
 
 if __name__ == "__main__":
     while True:

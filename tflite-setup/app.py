@@ -551,7 +551,7 @@ def predict():
 
 
 # -------------------------
-# GOOGLE GENERATIVE AI (Optional)
+# GOOGLE GENERATIVE AI
 # -------------------------
 GEN_AI_API_KEY = os.environ.get(
     "GEN_AI_API_KEY", "AIzaSyDceXe1mqRSvkafKu2f5UvbZ2C867ZDqUA"
