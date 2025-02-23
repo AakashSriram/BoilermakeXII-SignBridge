@@ -15,6 +15,9 @@ export default function SignBrige() {
     const [generatedSentence, setGeneratedSentence] = useState("");
     const [isGenerating, setIsGenerating] = useState(false);
 
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const recordedChunksRef = useRef<Blob[]>([]);
+
     // Adds a new detected word if the array has less than 5 items.
     const addDetectedText = (text: string) => {
         setDetectedTexts((prev) => {
@@ -165,6 +168,9 @@ export default function SignBrige() {
                 });
                 camera.start();
                 cameraInstanceRef.current = camera;
+
+                // Start recording
+                startRecording();
             } else {
                 console.error(
                     "Camera initialization error. Ensure the video element is mounted and window.Camera is defined."
@@ -174,8 +180,127 @@ export default function SignBrige() {
             if (cameraInstanceRef.current) {
                 cameraInstanceRef.current.stop();
             }
+
+            // Stop recording
+            stopRecording();
         }
         setIsRecording((prev) => !prev);
+    };
+    // Start video recording
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 800, height: 600 },
+                audio: false,
+            });
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                console.log("Video stream attached to video element.");
+
+                // Debug stream tracks
+                const videoTracks = stream.getVideoTracks();
+                if (videoTracks.length > 0) {
+                    console.log("Video track readyState:", videoTracks[0].readyState);
+                    console.log("Video track label:", videoTracks[0].label);
+                } else {
+                    console.error("No video tracks found in the stream!");
+                    return;
+                }
+            } else {
+                console.error("Video element not found!");
+                return;
+            }
+
+            recordedChunksRef.current = []; // Clear previous chunks
+
+            const mimeType = "video/webm";
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                console.error(`MIME type ${mimeType} is not supported in this browser.`);
+                return;
+            } else {
+                console.log(`MIME type ${mimeType} is supported.`);
+            }
+
+            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
+
+            mediaRecorderRef.current.ondataavailable = (event) => {
+                console.log("Data available from MediaRecorder:", event.data.size, "bytes");
+                if (event.data.size > 0) {
+                    recordedChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorderRef.current.onstart = () => {
+                console.log("MediaRecorder started recording.");
+            };
+
+            mediaRecorderRef.current.onstop = () => {
+                console.log("MediaRecorder stopped.");
+
+                if (recordedChunksRef.current.length > 0) {
+                    const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
+                    console.log("Final Blob size:", blob.size);
+
+                    if (blob.size > 0) {
+                        uploadVideoToBackend(blob);
+                    } else {
+                        console.error("The recorded video blob is empty!");
+                    }
+                } else {
+                    console.error("No recorded chunks available!");
+                }
+
+                recordedChunksRef.current = [];
+            };
+
+            mediaRecorderRef.current.onerror = (error) => {
+                console.error("MediaRecorder error:", error);
+            };
+
+            mediaRecorderRef.current.start(1000); // Request data every 1 second
+            console.log("Recording started");
+        } catch (error) {
+            console.error("Error accessing media devices or starting recording:", error);
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+            console.log("Stopping recording...");
+
+            setTimeout(() => {
+                mediaRecorderRef.current?.stop();
+            }, 1000); // Delay to ensure final chunks are processed
+        } else {
+            console.warn("MediaRecorder is not in a recording state.");
+        }
+        console.log("Recording stopped");
+    };
+
+    const uploadVideoToBackend = async (blob: Blob) => {
+        const formData = new FormData();
+
+        formData.append("file", blob, "recorded_video.webm");
+
+        console.log("FormData created, uploading to backend...");
+
+        try {
+            const response = await fetch("http://localhost:8000/upload", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log("Video uploaded to Google Drive:", data.shareable_link);
+                alert(`Video uploaded! Link: ${data.shareable_link}`);
+            } else {
+                console.error("Failed to upload video to the backend.");
+            }
+        } catch (error) {
+            console.error("Error uploading video:", error);
+        }
     };
 
     // Generate a coherent sentence using the accumulated words.
