@@ -275,7 +275,28 @@ export default function SignBrige() {
         } else {
             console.warn("MediaRecorder is not in a recording state.");
         }
-        console.log("Recording stopped");
+
+        // Stop the MediaPipe camera instance
+        if (cameraInstanceRef.current) {
+            console.log("Stopping MediaPipe camera...");
+            cameraInstanceRef.current.stop();
+            cameraInstanceRef.current = null;
+        }
+
+        // Stop the video stream properly
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            const tracks = stream.getTracks();
+
+            tracks.forEach((track) => {
+                console.log(`Stopping track: ${track.kind}`);
+                track.stop();
+            });
+
+            videoRef.current.srcObject = null;
+        }
+
+        console.log("Recording and camera stopped");
     };
 
     const uploadVideoToBackend = async (blob: Blob) => {
@@ -294,7 +315,7 @@ export default function SignBrige() {
             if (response.ok) {
                 const data = await response.json();
                 console.log("Video uploaded to Google Drive:", data.shareable_link);
-                alert(`Video uploaded! Link: ${data.shareable_link}`);
+                // alert(`Video uploaded! Link: ${data.shareable_link}`);
             } else {
                 console.error("Failed to upload video to the backend.");
             }
