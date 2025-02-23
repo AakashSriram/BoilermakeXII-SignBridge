@@ -133,6 +133,28 @@ export default function SignBrige() {
         });
     };
 
+    const uploadAudio = async (sentence: string) => {
+      try {
+          const response = await fetch("http://localhost:8000/uploadaudio", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sentence }),
+              credentials: "include",  // 🔹 Ensures cookies & headers are sent
+          });
+  
+          if (response.ok) {
+              const data = await response.json();
+              console.log("Audio uploaded successfully:", data);
+          } else {
+              console.error("Failed to upload audio.");
+          }
+      } catch (error) {
+          console.error("Error uploading audio:", error);
+      }
+  };
+  
+  
+
     // Send accumulated landmark frames to the backend for prediction.
     const sendLandmarks = async (frames: number[][][]) => {
         try {
@@ -266,18 +288,21 @@ export default function SignBrige() {
     };
 
     const stopRecording = () => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-            console.log("Stopping recording...");
-
-            setTimeout(() => {
-                mediaRecorderRef.current?.stop();
-            }, 1000); // Delay to ensure final chunks are processed
-        } else {
-            console.warn("MediaRecorder is not in a recording state.");
-        }
-        console.log("Recording stopped");
-    };
-
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+          console.log("Stopping recording...");
+  
+          setTimeout(() => {
+              mediaRecorderRef.current?.stop();
+              if (generatedSentence) {
+                  uploadAudio(generatedSentence); // Upload sentence when video stops
+              }
+          }, 1000); // Delay to ensure final chunks are processed
+      } else {
+          console.warn("MediaRecorder is not in a recording state.");
+      }
+      console.log("Recording stopped");
+  };
+  
     const uploadVideoToBackend = async (blob: Blob) => {
         const formData = new FormData();
 
@@ -344,7 +369,7 @@ export default function SignBrige() {
             <nav className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
                 <div className="flex items-center gap-2">
                     <Link2 size={28} className="text-blue-400" />
-                    <span className="text-2xl font-extrabold tracking-widest">SignBrige</span>
+                    <span className="text-2xl font-extrabold tracking-widest">SignBridge</span>
                 </div>
                 <div className="flex items-center gap-4">
                     <button
@@ -396,18 +421,6 @@ export default function SignBrige() {
                         <p className="text-2xl tracking-wider text-center">
                             {detectedText || "Waiting for prediction..."}
                         </p>
-                    </div>
-                    <div className="flex gap-4 mb-6">
-                        <button
-                            onClick={() => setDetectedText("")}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 transition-colors rounded-full shadow-md text-sm"
-                        >
-                            Clear Text
-                        </button>
-                        <button className="px-4 py-2 bg-green-600 hover:bg-green-700 transition-colors rounded-full shadow-md flex items-center gap-2 text-sm">
-                            <Mic size={16} />
-                            Speak Text
-                        </button>
                     </div>
                     {/* Detected Signs History */}
                     <div className="w-full max-w-md bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl p-4 shadow-xl mb-6">
