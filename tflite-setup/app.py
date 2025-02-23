@@ -385,14 +385,14 @@ def upload_audio():
         actual_text = sentence
         print("Received sentence:", sentence)
 
-        # Generate MP3 from text
+        # Generate WAV from text
         tts = gTTS(text=sentence, lang="en", tld=choose_voice(name))
         wav_filename = "generated_audio.wav"
         wav_path = os.path.join(UPLOAD_FOLDER, wav_filename)
         tts.save(wav_path)
 
         if predict_gender(name).lower() == "male":
-            sound = AudioSegment.from_file(wav_pathpath)
+            sound = AudioSegment.from_file(wav_path)
             # Lower pitch to simulate a male voice (slows down the speed slightly too)
             sound = sound._spawn(
                 sound.raw_data, overrides={"frame_rate": int(sound.frame_rate * 0.85)}
