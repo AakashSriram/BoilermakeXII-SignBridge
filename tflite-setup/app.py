@@ -54,8 +54,8 @@ demographic_gender = None
 demographic_gender_probability = None
 
 # Sync.so API Keys
-SYNC_GET_API_KEY = "sk-atK2Yhh0QMO_DXiPwy4fmA.qdBeLshHzVC8kDdKlVrkrf6U1Y2f03bS"
-SYNC_POST_API_KEY = "sk-atK2Yhh0QMO_DXiPwy4fmA.qdBeLshHzVC8kDdKlVrkrf6U1Y2f03bS"
+SYNC_GET_API_KEY = "sk-l-g8GNu4QruoVlAmZgI3KQ.exHh0AeyTt_hGoWkGEWgk6dQI4Q6rN91"
+SYNC_POST_API_KEY = "sk-l-g8GNu4QruoVlAmZgI3KQ.exHh0AeyTt_hGoWkGEWgk6dQI4Q6rN91"
 
 
 # -------------------------
