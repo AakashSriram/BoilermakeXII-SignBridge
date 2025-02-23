@@ -5,6 +5,15 @@ import { Camera as IconCamera, Sun, Moon, Settings, Link2 } from "lucide-react";
 import { useAuth0 } from "@auth0/auth0-react";
 
 export default function SignBridge() {
+  const [demographics, setDemographics] = useState({
+    predicted_race: "",
+    race_confidence: 0,
+    predicted_ethnicity: "",
+    ethnicity_confidence: 0,
+    predicted_gender: "",
+    gender_confidence: 0,
+  });
+  
   const { user } = useAuth0();
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
@@ -281,6 +290,17 @@ export default function SignBridge() {
         console.log("Video uploaded to Google Drive:", data.shareable_link);
         console.log("Final lipsynced link:", data.final_lipsynced_link);
         setFinalLipsyncedLink(data.final_lipsynced_link);
+        // Set demographics if available
+        if (data.predicted_race) {
+          setDemographics({
+            predicted_race: data.predicted_race,
+            race_confidence: data.race_confidence,
+            predicted_ethnicity: data.predicted_ethnicity,
+            ethnicity_confidence: data.ethnicity_confidence,
+            predicted_gender: data.predicted_gender,
+            gender_confidence: data.gender_confidence,
+          });
+        }
       } else {
         console.error("Failed to upload video to the backend.");
       }
@@ -288,6 +308,7 @@ export default function SignBridge() {
       console.error("Error uploading video:", error);
     }
   };
+  
 
   const handleGenerateSentence = async () => {
     if (detectedTexts.length !== 5) {
@@ -422,29 +443,57 @@ export default function SignBridge() {
 
       {/* Extended Section for Final Lipsynced Video */}
       {finalLipsyncedLink && (
-        <section className="min-h-screen w-full flex items-center justify-center p-4">
-          <div className="w-full max-w-5xl bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl shadow-xl p-8">
-            <h3 className="text-2xl font-semibold mb-6 text-center">Final Lipsynced Video</h3>
-            <div className="relative pb-[56.25%]">
-              <video
-                src={finalLipsyncedLink}
-                controls
-                autoPlay
-                className="absolute top-0 left-0 w-full h-full object-contain rounded-2xl"
-              />
-            </div>
-            <div className="mt-6 flex justify-center">
-              <a
-                href={finalLipsyncedLink}
-                download="final_video.webm"
-                className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full shadow-lg"
-              >
-                Download Video
-              </a>
-            </div>
-          </div>
-        </section>
-      )}
+  <section className="min-h-screen w-full flex items-center justify-center p-4">
+    <div className="w-full max-w-5xl bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl shadow-xl p-8 flex flex-col lg:flex-row">
+      {/* Left: Final Video */}
+      <div className="lg:w-2/3 w-full relative pb-[56.25%] lg:pb-0">
+        <video
+          src={finalLipsyncedLink}
+          controls
+          autoPlay
+          className="absolute lg:relative top-0 left-0 w-full h-full object-contain rounded-2xl"
+        />
+        <div className="mt-6 lg:hidden flex justify-center">
+          <a
+            href={finalLipsyncedLink}
+            download="final_video.webm"
+            className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full shadow-lg"
+          >
+            Download Video
+          </a>
+        </div>
+      </div>
+      {/* Right: Demographics Card */}
+      <div className="lg:w-1/3 w-full mt-6 lg:mt-0 lg:ml-6 flex flex-col justify-center">
+        <div className="bg-gray-700 p-4 rounded-lg shadow-lg">
+          <h3 className="text-2xl font-semibold mb-4 text-center">Demographic Info</h3>
+          <p>
+            <span className="font-bold">Race:</span> {demographics.predicted_race || "N/A"}{" "}
+            ({demographics.race_confidence ? (demographics.race_confidence * 100).toFixed(2) : "N/A"}%)
+          </p>
+          <p>
+            <span className="font-bold">Ethnicity:</span> {demographics.predicted_ethnicity || "N/A"}{" "}
+            ({demographics.ethnicity_confidence ? (demographics.ethnicity_confidence * 100).toFixed(2) : "N/A"}%)
+          </p>
+          <p>
+            <span className="font-bold">Gender:</span> {demographics.predicted_gender || "N/A"}{" "}
+            ({demographics.gender_confidence ? (demographics.gender_confidence * 100).toFixed(2) : "N/A"}%)
+          </p>
+        </div>
+        <div className="mt-6 hidden lg:flex justify-center">
+          <a
+            href={finalLipsyncedLink}
+            download="final_video.webm"
+            className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full shadow-lg"
+          >
+            Download Video
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+)}
+
     </div>
   );
 }

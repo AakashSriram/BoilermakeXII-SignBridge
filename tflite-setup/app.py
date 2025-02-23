@@ -45,7 +45,15 @@ audio_shareable_link = None
 lipsynced_video_link = None
 actual_text = None  # We'll store the last TTS text here globally.
 
-# Sync.so API Keys (example: you may have different keys for GET & POST)
+# Global demographic variables
+demographic_race = None
+demographic_race_probability = None
+demographic_ethnicity = None
+demographic_ethnicity_probability = None
+demographic_gender = None
+demographic_gender_probability = None
+
+# Sync.so API Keys
 SYNC_GET_API_KEY = "sk-atK2Yhh0QMO_DXiPwy4fmA.qdBeLshHzVC8kDdKlVrkrf6U1Y2f03bS"
 SYNC_POST_API_KEY = "sk-atK2Yhh0QMO_DXiPwy4fmA.qdBeLshHzVC8kDdKlVrkrf6U1Y2f03bS"
 
@@ -132,8 +140,6 @@ def get_sync(job_id, poll_interval=5, max_retries=60):
             data = response.json()
             print(data)
 
-            # Check the status that Sync.so returns.
-            # If "outputUrl" is directly available and the status is "complete":
             status = data.get("status", "").lower()
             if status == "completed":
                 output_url = data.get("outputUrl")
@@ -144,7 +150,6 @@ def get_sync(job_id, poll_interval=5, max_retries=60):
             elif status in ["error", "failed"]:
                 print(f"[Sync Job] The job failed. Full response:\n{data}")
                 return None
-            # Otherwise it's likely "processing"/"queued" - keep polling.
         else:
             print(f"[Attempt {attempt+1}] Failed to fetch status: {response.text}")
 
@@ -175,7 +180,6 @@ def post_sync(video_link, audio_link, text):
                 "provider": {
                     "name": "Shivam",
                     "voiceId": "01",
-                    # The script, if required by Sync.so
                     "script": text,
                 },
             },
@@ -192,9 +196,7 @@ def post_sync(video_link, audio_link, text):
                 print("No job_id returned from Sync.so response.")
                 return None
 
-            # (Optional) Wait a few seconds before polling
             time.sleep(5)
-
             final_url = get_sync(job_id)
             print("Lipsynced video link:", final_url)
             return final_url
@@ -206,32 +208,46 @@ def post_sync(video_link, audio_link, text):
         return None
 
 
-def predict_gender(name: str) -> str:
-    genderize = Genderize()
-    result = genderize.get([name])
+def predict_gender(name: str) -> tuple:
+    """
+    Uses Genderize to predict gender and returns a tuple (gender, probability).
+    """
+    genderize_client = Genderize()
+    result = genderize_client.get([name])
     if result and result[0]["gender"] in ["male", "female"]:
-        return result[0]["gender"]
-    return "female"
+        return result[0]["gender"], result[0].get("probability", 1.0)
+    return "female", 1.0
 
 
 def predict_race_and_ethnicity(name: str) -> tuple:
-    race = model.predict_race(name)
-    ethnicity = model.predict_ethnicity(name)
-    race = race[0]["label"].lower() if race else "unknown"
-    ethnicity = ethnicity[0]["label"].lower() if ethnicity else "unknown"
-    return race, ethnicity
+    """
+    Uses RaceBERT to predict race and ethnicity.
+    Returns a tuple: (race_label, race_probability, ethnicity_label, ethnicity_probability)
+    """
+    race_preds = model.predict_race(name)
+    ethnicity_preds = model.predict_ethnicity(name)
+    if race_preds:
+        race_label = race_preds[0]["label"].lower()
+        race_prob = race_preds[0].get("score", 1.0)
+    else:
+        race_label, race_prob = "unknown", 0.0
+    if ethnicity_preds:
+        ethnicity_label = ethnicity_preds[0]["label"].lower()
+        ethnicity_prob = ethnicity_preds[0].get("score", 1.0)
+    else:
+        ethnicity_label, ethnicity_prob = "unknown", 0.0
+    return race_label, race_prob, ethnicity_label, ethnicity_prob
 
 
 def choose_voice(name: str) -> str:
-    race, ethnicity = predict_race_and_ethnicity(name)
-
+    race, _, ethnicity, _ = predict_race_and_ethnicity(name)
     if ethnicity == "asian,indiansubcontinent":
         return "co.in"
-    elif race == "nh_black" or ethnicity.contains("greaterafrican"):
+    elif race == "nh_black" or "greaterafrican" in ethnicity:
         return "com.ng"
     elif ethnicity == "greatereuropean,british":
         return "co.uk"
-    elif race == "nh_white" or ethnicity.contains("greatereuropean"):
+    elif race == "nh_white" or "greatereuropean" in ethnicity:
         return "com"
     else:
         return "com"
@@ -257,18 +273,15 @@ except Exception as e:
 with open(JSON_MAP_PATH, "r") as f:
     s2p_map = json.load(f)
 
-# Lowercase the keys
 s2p_map = {k.lower(): v for k, v in s2p_map.items()}
 p2s_map = {v: k for k, v in s2p_map.items()}
 
-# Global lock for thread-safe TFLite inference
 inference_lock = threading.Lock()
 
 
 # -------------------------
 # FLASK ROUTES
 # -------------------------
-
 
 @app.route("/uploadvideo", methods=["POST"])
 def upload_video():
@@ -281,18 +294,15 @@ def upload_video():
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
 
-    # Save the uploaded file locally
     filename = secure_filename(file.filename)
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     file.save(file_path)
 
-    # Optional check for empty file
     file_size = os.path.getsize(file_path)
     if file_size == 0:
         os.remove(file_path)
         return jsonify({"error": "Uploaded file is empty"}), 400
 
-    # 1) Convert .webm to .mp4 (if needed) via ffmpeg
     extension = os.path.splitext(filename)[1].lower()
     if extension == ".webm":
         print("Converting .webm to .mp4 via ffmpeg...")
@@ -301,7 +311,7 @@ def upload_video():
 
         ffmpeg_command = [
             "ffmpeg",
-            "-y",  # Overwrite
+            "-y",
             "-i",
             file_path,
             "-c:v",
@@ -323,9 +333,8 @@ def upload_video():
     else:
         print("No conversion needed. (File is not .webm)")
 
-    # 2) Upload the final (.mp4) to Drive
     try:
-        folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"  # Your own folder ID
+        folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"
         shareable_link = upload_file_to_drive(file_path, folder_id)
         os.remove(file_path)
     except Exception as e:
@@ -335,27 +344,24 @@ def upload_video():
     video_shareable_link = shareable_link
     print("Stored video link in global variable:", video_shareable_link)
 
-    # Convert it to a downloadable link
     converted_video_link = convert_drive_link(video_shareable_link)
 
-    # If we already have audio, do lipsync
     if audio_shareable_link:
         converted_audio_link = convert_drive_link(audio_shareable_link)
-        # Lipsync and get the final link
         lipsynced_video_link = post_sync(
             converted_video_link, converted_audio_link, actual_text
         )
-        return (
-            jsonify(
-                {
-                    "shareable_link": video_shareable_link,
-                    "final_lipsynced_link": lipsynced_video_link,
-                }
-            ),
-            200,
-        )
+        return jsonify({
+            "shareable_link": video_shareable_link,
+            "final_lipsynced_link": lipsynced_video_link,
+            "predicted_race": demographic_race,
+            "race_confidence": demographic_race_probability,
+            "predicted_ethnicity": demographic_ethnicity,
+            "ethnicity_confidence": demographic_ethnicity_probability,
+            "predicted_gender": demographic_gender,
+            "gender_confidence": demographic_gender_probability,
+        }), 200
 
-    # Otherwise return only the shareable link
     return jsonify({"shareable_link": video_shareable_link}), 200
 
 
@@ -369,6 +375,9 @@ def upload_audio():
     5. If a video link is already stored, calls post_sync automatically.
     """
     global audio_shareable_link, video_shareable_link, lipsynced_video_link, actual_text
+    global demographic_race, demographic_race_probability
+    global demographic_ethnicity, demographic_ethnicity_probability
+    global demographic_gender, demographic_gender_probability
 
     if request.method == "OPTIONS":
         response = jsonify({"message": "CORS preflight passed"})
@@ -378,32 +387,32 @@ def upload_audio():
     try:
         data = request.get_json(force=True)
         sentence = data.get("sentence")
-        # Get the user's name from the payload; if not provided, default to "default"
         name = data.get("name", "default")
         if not sentence:
             return jsonify({"error": "Missing 'sentence' key in JSON payload"}), 400
 
-        # Store the sentence globally
         actual_text = sentence
         print("Received sentence:", sentence, "for user:", name)
 
-        # Generate WAV from text using a voice based on the user's name
+        # Compute demographic predictions using the provided name.
+        demographic_race, demographic_race_probability, demographic_ethnicity, demographic_ethnicity_probability = predict_race_and_ethnicity(name)
+        demographic_gender, demographic_gender_probability = predict_gender(name)
+
         tts = gTTS(text=sentence, lang="en", tld=choose_voice(name))
         wav_filename = "generated_audio.wav"
         wav_path = os.path.join(UPLOAD_FOLDER, wav_filename)
         tts.save(wav_path)
 
-        # Adjust the pitch if the predicted gender is male
-        if predict_gender(name).lower() == "male":
+        # Use the extracted demographic_gender variable instead of calling predict_gender again.
+        if demographic_gender.lower() == "male":
             sound = AudioSegment.from_file(wav_path)
-            # Lower pitch (and slow down slightly) to simulate a male voice
+            # Lower pitch and slow down slightly to simulate a male voice.
             sound = sound._spawn(
                 sound.raw_data, overrides={"frame_rate": int(sound.frame_rate * 0.85)}
             )
             sound = sound.set_frame_rate(44100)
             sound.export(wav_path, format="wav")
 
-        # Upload the WAV file to Google Drive
         folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"
         shareable_link = upload_file_to_drive(wav_path, folder_id)
         os.remove(wav_path)
@@ -411,7 +420,6 @@ def upload_audio():
         audio_shareable_link = shareable_link
         print("Stored audio link:", audio_shareable_link)
 
-        # If a video link already exists, perform lipsync
         if video_shareable_link:
             converted_video_link = convert_drive_link(video_shareable_link)
             converted_audio_link = convert_drive_link(audio_shareable_link)
@@ -419,15 +427,16 @@ def upload_audio():
                 converted_video_link, converted_audio_link, actual_text
             )
 
-            return (
-                jsonify(
-                    {
-                        "shareable_link": audio_shareable_link,
-                        "final_lipsynced_link": lipsynced_video_link,
-                    }
-                ),
-                200,
-            )
+            return jsonify({
+                "shareable_link": audio_shareable_link,
+                "final_lipsynced_link": lipsynced_video_link,
+                "predicted_race": demographic_race,
+                "race_confidence": demographic_race_probability,
+                "predicted_ethnicity": demographic_ethnicity,
+                "ethnicity_confidence": demographic_ethnicity_probability,
+                "predicted_gender": demographic_gender,
+                "gender_confidence": demographic_gender_probability,
+            }), 200
 
         return jsonify({"shareable_link": audio_shareable_link}), 200
 
@@ -478,7 +487,6 @@ def predict():
         max_confidence = float(np.max(preds))
         predicted_sign = p2s_map.get(predicted_index, "Unknown")
 
-        # Example check if "lion" was a placeholder for "no sign"
         if predicted_sign.lower() == "lion":
             predicted_sign = "No sign detected"
 
@@ -513,7 +521,6 @@ def generate_sentence():
         response = client.models.generate_content(
             model="gemini-2.0-flash", contents=[query]
         )
-        # Adjust if your generative AI client returns text differently
         sentence = response.text
 
         return jsonify({"sentence": sentence})
@@ -523,5 +530,4 @@ def generate_sentence():
 
 
 if __name__ == "__main__":
-    # Run Flask app
     app.run(host="0.0.0.0", port=8000)
