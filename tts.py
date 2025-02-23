@@ -1,80 +1,56 @@
-import pyttsx3
+from gtts import gTTS
+from pydub import AudioSegment
 import os
 
-# Initialize the TTS engine
-engine = pyttsx3.init()
 
+def text_to_speech_gtts(
+    sentence: str, language: str = "en", accent: str = "com", gender: str = "female"
+):
+    """
+    :param sentence: Text to convert to speech
+    :param language: Language code (e.g., 'en' for English)
+    :param accent: TLD for accents ('com' = US, 'co.uk' = British, 'co.in' = Indian)
+    :param gender: 'male' or 'female' (adjusts pitch to simulate gender)
+    """
+    tts = gTTS(text=sentence, lang=language, tld=accent)
+    output_file = "output.wav"
+    tts.save(output_file)
 
-# Function to list available voices
-def list_available_voices():
-    voices = engine.getProperty("voices")
-    for voice in voices:
-        print(f"ID: {voice.id}, Name: {voice.name}, Language: {voice.languages}")
-
-
-# Define a dictionary to map voice types to available macOS voices
-VOICE_MAP = {
-    "indian": "com.apple.voice.compact.hi-IN.Lekha",
-    "american": "com.apple.voice.compact.en-US.Samantha",
-    "british": "com.apple.voice.compact.en-GB.Daniel",
-    "australian": "com.apple.voice.compact.en-AU.Karen",
-    "irish": "com.apple.voice.compact.en-IE.Moira",
-    "south_african": "com.apple.voice.compact.en-ZA.Tessa",
-}
-
-
-def text_to_speech(
-    sentence: str,
-    voice: str = "indian",
-    output_file: str = "output.wav",
-    rate: int = 160,
-) -> None:
-    voice = voice.lower()
-    if voice not in VOICE_MAP:
-        print(f"Voice '{voice}' not recognized. Defaulting to 'indian'.")
-        voice = "indian"
-
-    # Set the voice for the engine
-    available_voices = [v.id for v in engine.getProperty("voices")]
-    if VOICE_MAP[voice] not in available_voices:
-        print(
-            f"Voice '{voice}' is not available on this system. Defaulting to 'Samantha'."
+    # Adjust pitch for a male-sounding voice
+    if gender.lower() == "male":
+        sound = AudioSegment.from_file(output_file)
+        # Lower pitch to simulate a male voice (slows down the speed slightly too)
+        sound = sound._spawn(
+            sound.raw_data, overrides={"frame_rate": int(sound.frame_rate * 0.85)}
         )
-        voice = "american"
+        sound = sound.set_frame_rate(44100)
+        sound.export(output_file, format="wav")
 
-    engine.setProperty("voice", VOICE_MAP[voice])
-
-    # Set a more natural speaking rate
-    engine.setProperty("rate", rate)
-
-    print(f"Starting text-to-speech conversion using the '{voice}' voice...")
-
-    engine.say(".")
-
-    # Save the speech to a file
-    engine.save_to_file(sentence, output_file)
-
-    try:
-        # Wait for the speech to finish
-        engine.runAndWait()
-    except AttributeError as e:
-        print(f"Error: {e}")
-        print(
-            "There was an issue with the NSSpeechDriver on macOS. Try restarting the application."
-        )
-    engine.stop()
-
-    # Check if file is created
-    if os.path.exists(output_file):
-        print(f"Audio saved as {output_file}")
-    else:
-        print("Failed to save audio file.")
+    os.system(
+        f"afplay {output_file}"
+    )  # macOS playback, use 'start' for Windows, 'mpg321' for Linux
+    print(f"Audio saved as {output_file}")
 
 
-# Example usage
-if __name__ == "__main__":
-    list_available_voices()
-    text_to_speech(
-        "Hello, this is a test of the text-to-speech function. I like curry. Street food is amazing.",
-        voice="indian",
-    )
+# Example usage with different accents and gender simulation
+text_to_speech_gtts(
+    "Hello, this is a test with an American male voice.", accent="com", gender="male"
+)
+text_to_speech_gtts(
+    "Hello, this is a test with a British female voice.",
+    accent="co.uk",
+    gender="female",
+)
+text_to_speech_gtts(
+    "Hello, this is a test with an Indian male voice.", accent="co.in", gender="male"
+)
+text_to_speech_gtts(
+    "Hello, this is a test with an Indian female voice.",
+    accent="co.in",
+    gender="female",
+)
+text_to_speech_gtts(
+    "Hello, this is a test with an Australian female voice.",
+    accent="com.au",
+    gender="female",
+)
