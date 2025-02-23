@@ -360,7 +360,6 @@ def upload_video():
 
 
 @app.route("/uploadaudio", methods=["POST", "OPTIONS"])
-@app.route("/uploadaudio", methods=["POST", "OPTIONS"])
 def upload_audio():
     """
     1. Receives text and name in JSON payload.
