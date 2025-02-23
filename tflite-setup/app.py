@@ -12,12 +12,17 @@ from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 from werkzeug.utils import secure_filename
 from gtts import gTTS
+from pydub import AudioSegment
 import requests
 from typing import Any
 import re
 import ssl
+from racebert import RaceBERT
+from genderize import Genderize
 
 ssl._create_default_https_context = ssl._create_unverified_context
+
+model = RaceBERT()
 
 app = Flask(__name__)
 CORS(
@@ -44,6 +49,7 @@ actual_text = None  # We'll store the last TTS text here globally.
 SYNC_GET_API_KEY = "sk-atK2Yhh0QMO_DXiPwy4fmA.qdBeLshHzVC8kDdKlVrkrf6U1Y2f03bS"
 SYNC_POST_API_KEY = "sk-atK2Yhh0QMO_DXiPwy4fmA.qdBeLshHzVC8kDdKlVrkrf6U1Y2f03bS"
 
+
 # -------------------------
 # HELPER FUNCTIONS
 # -------------------------
@@ -51,7 +57,7 @@ def convert_drive_link(original_link):
     """
     Converts a Google Drive view link (with '/file/d/...') to a direct download link.
     """
-    match = re.search(r'/d/([a-zA-Z0-9_-]+)', original_link)
+    match = re.search(r"/d/([a-zA-Z0-9_-]+)", original_link)
     if match:
         file_id = match.group(1)
         download_link = f"https://drive.google.com/uc?export=download&id={file_id}"
@@ -126,7 +132,7 @@ def get_sync(job_id, poll_interval=5, max_retries=60):
             data = response.json()
             print(data)
 
-            # Check the status that Sync.so returns. 
+            # Check the status that Sync.so returns.
             # If "outputUrl" is directly available and the status is "complete":
             status = data.get("status", "").lower()
             if status == "completed":
@@ -170,10 +176,10 @@ def post_sync(video_link, audio_link, text):
                     "name": "Shivam",
                     "voiceId": "01",
                     # The script, if required by Sync.so
-                    "script": text
-                }
-            }
-        ]
+                    "script": text,
+                },
+            },
+        ],
     }
     print(payload)
     print(headers)
@@ -198,6 +204,37 @@ def post_sync(video_link, audio_link, text):
     except Exception as e:
         print("Error while calling Sync.so:", str(e))
         return None
+
+
+def predict_gender(name: str) -> str:
+    genderize = Genderize()
+    result = genderize.get([name])
+    if result and result[0]["gender"] in ["male", "female"]:
+        return result[0]["gender"]
+    return "female"
+
+
+def predict_race_and_ethnicity(name: str) -> tuple:
+    race = model.predict_race(name)
+    ethnicity = model.predict_ethnicity(name)
+    race = race[0]["label"].lower() if race else "unknown"
+    ethnicity = ethnicity[0]["label"].lower() if ethnicity else "unknown"
+    return race, ethnicity
+
+
+def choose_voice(name: str) -> str:
+    race, ethnicity = predict_race_and_ethnicity(name)
+
+    if ethnicity == "asian,indiansubcontinent":
+        return "co.in"
+    elif race == "nh_black" or ethnicity.contains("greaterafrican"):
+        return "com.ng"
+    elif ethnicity == "greatereuropean,british":
+        return "co.uk"
+    elif race == "nh_white" or ethnicity.contains("greatereuropean"):
+        return "com"
+    else:
+        return "com"
 
 
 # -------------------------
@@ -232,6 +269,7 @@ inference_lock = threading.Lock()
 # FLASK ROUTES
 # -------------------------
 
+
 @app.route("/uploadvideo", methods=["POST"])
 def upload_video():
     global video_shareable_link, audio_shareable_link, lipsynced_video_link
@@ -264,10 +302,13 @@ def upload_video():
         ffmpeg_command = [
             "ffmpeg",
             "-y",  # Overwrite
-            "-i", file_path,
-            "-c:v", "libx264",
-            "-c:a", "aac",
-            mp4_file_path
+            "-i",
+            file_path,
+            "-c:v",
+            "libx264",
+            "-c:a",
+            "aac",
+            mp4_file_path,
         ]
         try:
             subprocess.run(ffmpeg_command, check=True)
@@ -301,11 +342,18 @@ def upload_video():
     if audio_shareable_link:
         converted_audio_link = convert_drive_link(audio_shareable_link)
         # Lipsync and get the final link
-        lipsynced_video_link = post_sync(converted_video_link, converted_audio_link, actual_text)
-        return jsonify({
-            "shareable_link": video_shareable_link,
-            "final_lipsynced_link": lipsynced_video_link
-        }), 200
+        lipsynced_video_link = post_sync(
+            converted_video_link, converted_audio_link, actual_text
+        )
+        return (
+            jsonify(
+                {
+                    "shareable_link": video_shareable_link,
+                    "final_lipsynced_link": lipsynced_video_link,
+                }
+            ),
+            200,
+        )
 
     # Otherwise return only the shareable link
     return jsonify({"shareable_link": video_shareable_link}), 200
@@ -376,12 +424,19 @@ def upload_audio():
         if video_shareable_link:
             converted_video_link = convert_drive_link(video_shareable_link)
             converted_audio_link = convert_drive_link(audio_shareable_link)
-            lipsynced_video_link = post_sync(converted_video_link, converted_audio_link, actual_text)
+            lipsynced_video_link = post_sync(
+                converted_video_link, converted_audio_link, actual_text
+            )
 
-            return jsonify({
-                "shareable_link": audio_shareable_link,
-                "final_lipsynced_link": lipsynced_video_link
-            }), 200
+            return (
+                jsonify(
+                    {
+                        "shareable_link": audio_shareable_link,
+                        "final_lipsynced_link": lipsynced_video_link,
+                    }
+                ),
+                200,
+            )
 
         return jsonify({"shareable_link": audio_shareable_link}), 200
 
@@ -407,9 +462,14 @@ def predict():
 
         input_data = np.array(frames, dtype=np.float32)
         if input_data.ndim != 3 or input_data.shape[1:] != (543, 3):
-            return jsonify({
-                "error": f"Invalid input shape: expected (N, 543, 3), got {input_data.shape}"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "error": f"Invalid input shape: expected (N, 543, 3), got {input_data.shape}"
+                    }
+                ),
+                400,
+            )
 
         with inference_lock:
             if predict_fn:
@@ -445,6 +505,7 @@ GEN_AI_API_KEY = os.environ.get(
     "GEN_AI_API_KEY", "AIzaSyDceXe1mqRSvkafKu2f5UvbZ2C867ZDqUA"
 )
 client = genai.Client(api_key=GEN_AI_API_KEY)
+
 
 @app.route("/generate_sentence", methods=["POST", "OPTIONS"])
 def generate_sentence():
