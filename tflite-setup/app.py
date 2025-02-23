@@ -253,6 +253,59 @@ def choose_voice(name: str) -> str:
         return "com"
 
 
+# Helper functions to format demographics before sending to the frontend.
+def format_race(race: str) -> str:
+    mapping = {
+        "nh_white": "Non-hispanic White",
+        "hispanic": "Hispanic",
+        "nh_black": "Non-hispanic Black",
+        "api": "Asian & Pacific Islander",
+        "aian": "American Indian & Alaskan Native",
+    }
+    return mapping.get(race, race)
+
+
+import re
+
+def format_ethnicity(ethnicity: str) -> str:
+    """
+    Formats the ethnicity string by ensuring there is a space after each comma,
+    splitting the string into tokens, handling known tokens with custom formatting,
+    and converting each token to title case.
+    
+    Example:
+      "Asian, Indiansubcontinent" -> "Asian, Indian Sub-Continent"
+    """
+    # Ensure there's a space after each comma.
+    ethnicity = ethnicity.replace(",", ", ")
+    
+    # Split the string into tokens based on commas.
+    tokens = [token.strip() for token in ethnicity.split(",")]
+    formatted_tokens = []
+    
+    for token in tokens:
+        # Handle specific known tokens
+        if token.lower() == "indiansubcontinent":
+            formatted_tokens.append("Indian Sub-Continent")
+        else:
+            # Insert a space before any uppercase letter that follows a lowercase letter.
+            token_with_spaces = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', token)
+            formatted_tokens.append(token_with_spaces.title())
+    
+    # Rejoin tokens with a comma and a space.
+    return ", ".join(formatted_tokens)
+
+
+
+
+def format_gender(gender: str) -> str:
+    if gender.lower() == "male":
+        return "Male"
+    elif gender.lower() == "female":
+        return "Female"
+    return gender
+
+
 # -------------------------
 # LOAD TFLITE MODEL
 # -------------------------
@@ -354,11 +407,11 @@ def upload_video():
         return jsonify({
             "shareable_link": video_shareable_link,
             "final_lipsynced_link": lipsynced_video_link,
-            "predicted_race": demographic_race,
+            "predicted_race": format_race(demographic_race) if demographic_race else None,
             "race_confidence": demographic_race_probability,
-            "predicted_ethnicity": demographic_ethnicity,
+            "predicted_ethnicity": format_ethnicity(demographic_ethnicity) if demographic_ethnicity else None,
             "ethnicity_confidence": demographic_ethnicity_probability,
-            "predicted_gender": demographic_gender,
+            "predicted_gender": format_gender(demographic_gender) if demographic_gender else None,
             "gender_confidence": demographic_gender_probability,
         }), 200
 
@@ -430,11 +483,11 @@ def upload_audio():
             return jsonify({
                 "shareable_link": audio_shareable_link,
                 "final_lipsynced_link": lipsynced_video_link,
-                "predicted_race": demographic_race,
+                "predicted_race": format_race(demographic_race) if demographic_race else None,
                 "race_confidence": demographic_race_probability,
-                "predicted_ethnicity": demographic_ethnicity,
+                "predicted_ethnicity": format_ethnicity(demographic_ethnicity) if demographic_ethnicity else None,
                 "ethnicity_confidence": demographic_ethnicity_probability,
-                "predicted_gender": demographic_gender,
+                "predicted_gender": format_gender(demographic_gender) if demographic_gender else None,
                 "gender_confidence": demographic_gender_probability,
             }), 200
 

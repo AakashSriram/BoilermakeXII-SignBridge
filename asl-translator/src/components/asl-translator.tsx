@@ -3,8 +3,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Camera as IconCamera, Sun, Moon, Settings, Link2 } from "lucide-react";
 import { useAuth0 } from "@auth0/auth0-react";
+import { motion } from "framer-motion";
 
 export default function SignBridge() {
+  const finalVideoRef = useRef(null);
+
+
   const [demographics, setDemographics] = useState({
     predicted_race: "",
     race_confidence: 0,
@@ -31,6 +35,11 @@ export default function SignBridge() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const holisticRef = useRef<any>(null);
   const cameraInstanceRef = useRef<any>(null);
+  useEffect(() => {
+    if (finalLipsyncedLink && finalVideoRef.current) {
+      finalVideoRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [finalLipsyncedLink]);
 
   const addDetectedText = (text: string) => {
     setDetectedTexts((prev) => {
@@ -443,21 +452,21 @@ export default function SignBridge() {
 
       {/* Extended Section for Final Lipsynced Video */}
       {finalLipsyncedLink && (
-  <section className="min-h-screen w-full flex items-center justify-center p-4">
-    <div className="w-full max-w-5xl bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-2xl shadow-xl p-8 flex flex-col lg:flex-row">
+  <section ref={finalVideoRef} className="min-h-screen w-full flex items-center justify-center p-4">
+    <div className="w-full max-w-5xl bg-gradient-to-br from-purple-600 to-indigo-600 bg-opacity-90 backdrop-blur-lg rounded-3xl shadow-2xl p-8 flex flex-col lg:flex-row">
       {/* Left: Final Video */}
       <div className="lg:w-2/3 w-full relative pb-[56.25%] lg:pb-0">
         <video
           src={finalLipsyncedLink}
           controls
           autoPlay
-          className="absolute lg:relative top-0 left-0 w-full h-full object-contain rounded-2xl"
+          className="absolute lg:relative top-0 left-0 w-full h-full object-contain rounded-3xl"
         />
         <div className="mt-6 lg:hidden flex justify-center">
           <a
             href={finalLipsyncedLink}
             download="final_video.webm"
-            className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full shadow-lg"
+            className="inline-block px-8 py-4 bg-blue-500 hover:bg-blue-700 text-white font-bold rounded-full shadow-xl transform hover:scale-105 transition duration-300"
           >
             Download Video
           </a>
@@ -465,26 +474,41 @@ export default function SignBridge() {
       </div>
       {/* Right: Demographics Card */}
       <div className="lg:w-1/3 w-full mt-6 lg:mt-0 lg:ml-6 flex flex-col justify-center">
-        <div className="bg-gray-700 p-4 rounded-lg shadow-lg">
-          <h3 className="text-2xl font-semibold mb-4 text-center">Demographic Info</h3>
-          <p>
+        <div className="bg-white bg-opacity-10 p-6 rounded-2xl shadow-2xl border border-white border-opacity-30">
+          <h3 className="text-3xl font-extrabold mb-6 text-center text-white">Demographic Info</h3>
+          <motion.p 
+            className="text-xl text-white mb-4"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
             <span className="font-bold">Race:</span> {demographics.predicted_race || "N/A"}{" "}
             ({demographics.race_confidence ? (demographics.race_confidence * 100).toFixed(2) : "N/A"}%)
-          </p>
-          <p>
+          </motion.p>
+          <motion.p 
+            className="text-xl text-white mb-4"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
             <span className="font-bold">Ethnicity:</span> {demographics.predicted_ethnicity || "N/A"}{" "}
             ({demographics.ethnicity_confidence ? (demographics.ethnicity_confidence * 100).toFixed(2) : "N/A"}%)
-          </p>
-          <p>
+          </motion.p>
+          <motion.p 
+            className="text-xl text-white"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+          >
             <span className="font-bold">Gender:</span> {demographics.predicted_gender || "N/A"}{" "}
             ({demographics.gender_confidence ? (demographics.gender_confidence * 100).toFixed(2) : "N/A"}%)
-          </p>
+          </motion.p>
         </div>
         <div className="mt-6 hidden lg:flex justify-center">
           <a
             href={finalLipsyncedLink}
             download="final_video.webm"
-            className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full shadow-lg"
+            className="inline-block px-8 py-4 bg-blue-500 hover:bg-blue-700 text-white font-bold rounded-full shadow-xl transform hover:scale-105 transition duration-300"
           >
             Download Video
           </a>
