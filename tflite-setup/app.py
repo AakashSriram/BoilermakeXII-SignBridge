@@ -386,31 +386,43 @@ def upload_audio():
         print("Received sentence:", sentence)
 
         # Generate MP3 from text
-        tts = gTTS(text=sentence, lang="en")
-        mp3_filename = "generated_audio.mp3"
-        mp3_path = os.path.join(UPLOAD_FOLDER, mp3_filename)
-        tts.save(mp3_path)
-
-        # Convert MP3 to WAV using ffmpeg
+        tts = gTTS(text=sentence, lang="en", tld=choose_voice(name))
         wav_filename = "generated_audio.wav"
         wav_path = os.path.join(UPLOAD_FOLDER, wav_filename)
-        ffmpeg_command = [
-            "ffmpeg",
-            "-y",           
-            "-i", mp3_path,  
-            "-acodec", "pcm_s16le",  
-            "-ar", "44100",  
-            wav_path
-        ]
-        try:
-            subprocess.run(ffmpeg_command, check=True)
-            print(f"Converted {mp3_filename} to {wav_filename} successfully.")
-        except subprocess.CalledProcessError as e:
-            os.remove(mp3_path)
-            return jsonify({"error": f"ffmpeg conversion failed: {str(e)}"}), 500
+        tts.save(wav_path)
 
-        # Remove the original MP3
-        os.remove(mp3_path)
+        if predict_gender(name).lower() == "male":
+            sound = AudioSegment.from_file(wav_pathpath)
+            # Lower pitch to simulate a male voice (slows down the speed slightly too)
+            sound = sound._spawn(
+                sound.raw_data, overrides={"frame_rate": int(sound.frame_rate * 0.85)}
+            )
+            sound = sound.set_frame_rate(44100)
+            sound.export(wav_path, format="wav")
+
+        # # Convert MP3 to WAV using ffmpeg
+        # wav_filename = "generated_audio.wav"
+        # wav_path = os.path.join(UPLOAD_FOLDER, wav_filename)
+        # ffmpeg_command = [
+        #     "ffmpeg",
+        #     "-y",
+        #     "-i",
+        #     wav_path,
+        #     "-acodec",
+        #     "pcm_s16le",
+        #     "-ar",
+        #     "44100",
+        #     wav_path,
+        # ]
+        # try:
+        #     subprocess.run(ffmpeg_command, check=True)
+        #     print(f"Converted {wav_filename} to {wav_filename} successfully.")
+        # except subprocess.CalledProcessError as e:
+        #     os.remove(wav_path)
+        #     return jsonify({"error": f"ffmpeg conversion failed: {str(e)}"}), 500
+
+        # Remove the original WAV
+        # os.remove(wav_path)
 
         # Upload the WAV file to Google Drive
         folder_id = "1VkEY_uqLp5O66zGqpTr8o5TNi_K4rf20"
