@@ -450,10 +450,9 @@ export default function SignBridge() {
         </div>
       </main>
 
-      {/* Extended Section for Final Lipsynced Video */}
       {finalLipsyncedLink && (
   <section ref={finalVideoRef} className="min-h-screen w-full flex items-center justify-center p-4">
-    <div className="w-full max-w-5xl bg-gradient-to-br from-purple-600 to-indigo-600 bg-opacity-90 backdrop-blur-lg rounded-3xl shadow-2xl p-8 flex flex-col lg:flex-row">
+    <div className="w-full max-w-6xl bg-gradient-to-br from-gray-900 via-gray-800 to-black bg-opacity-90 backdrop-blur-lg rounded-3xl shadow-2xl p-12 flex flex-col lg:flex-row">
       {/* Left: Final Video */}
       <div className="lg:w-2/3 w-full relative pb-[56.25%] lg:pb-0">
         <video
@@ -466,49 +465,54 @@ export default function SignBridge() {
           <a
             href={finalLipsyncedLink}
             download="final_video.webm"
-            className="inline-block px-8 py-4 bg-blue-500 hover:bg-blue-700 text-white font-bold rounded-full shadow-xl transform hover:scale-105 transition duration-300"
+            className="inline-block px-10 py-5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-full shadow transition-colors duration-300"
           >
             Download Video
           </a>
         </div>
       </div>
-      {/* Right: Demographics Card */}
-      <div className="lg:w-1/3 w-full mt-6 lg:mt-0 lg:ml-6 flex flex-col justify-center">
-        <div className="bg-white bg-opacity-10 p-6 rounded-2xl shadow-2xl border border-white border-opacity-30">
-          <h3 className="text-3xl font-extrabold mb-6 text-center text-white">Demographic Info</h3>
-          <motion.p 
-            className="text-xl text-white mb-4"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <span className="font-bold">Race:</span> {demographics.predicted_race || "N/A"}{" "}
-            ({demographics.race_confidence ? (demographics.race_confidence * 100).toFixed(2) : "N/A"}%)
-          </motion.p>
-          <motion.p 
-            className="text-xl text-white mb-4"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
-            <span className="font-bold">Ethnicity:</span> {demographics.predicted_ethnicity || "N/A"}{" "}
-            ({demographics.ethnicity_confidence ? (demographics.ethnicity_confidence * 100).toFixed(2) : "N/A"}%)
-          </motion.p>
-          <motion.p 
-            className="text-xl text-white"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-          >
-            <span className="font-bold">Gender:</span> {demographics.predicted_gender || "N/A"}{" "}
-            ({demographics.gender_confidence ? (demographics.gender_confidence * 100).toFixed(2) : "N/A"}%)
-          </motion.p>
+      {/* Right: Flashy Demographics Card */}
+      <div className="lg:w-1/3 w-full mt-6 lg:mt-0 lg:ml-8 flex flex-col justify-center">
+        <div className="relative p-8 rounded-3xl overflow-hidden shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 opacity-30 blur-lg"></div>
+          <div className="relative z-10 bg-black bg-opacity-75 p-8 rounded-3xl border border-gray-700">
+            <h3 className="text-3xl font-bold mb-6 text-center text-white drop-shadow-lg">
+              Demographic Predictions
+            </h3>
+            <motion.p 
+              className="text-xl text-white mb-4"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <span className="font-semibold">Race:</span> {demographics.predicted_race || "N/A"}{" "}
+              ({demographics.race_confidence ? (demographics.race_confidence * 100).toFixed(2) : "N/A"}%)
+            </motion.p>
+            <motion.p 
+              className="text-xl text-white mb-4"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+            >
+              <span className="font-semibold">Ethnicity:</span> {demographics.predicted_ethnicity || "N/A"}{" "}
+              ({demographics.ethnicity_confidence ? (demographics.ethnicity_confidence * 100).toFixed(2) : "N/A"}%)
+            </motion.p>
+            <motion.p 
+              className="text-xl text-white"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.0 }}
+            >
+              <span className="font-semibold">Gender:</span> {demographics.predicted_gender || "N/A"}{" "}
+              ({demographics.gender_confidence ? (demographics.gender_confidence * 100).toFixed(2) : "N/A"}%)
+            </motion.p>
+          </div>
         </div>
         <div className="mt-6 hidden lg:flex justify-center">
           <a
             href={finalLipsyncedLink}
             download="final_video.webm"
-            className="inline-block px-8 py-4 bg-blue-500 hover:bg-blue-700 text-white font-bold rounded-full shadow-xl transform hover:scale-105 transition duration-300"
+            className="inline-block px-10 py-5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-full shadow transition-colors duration-300"
           >
             Download Video
           </a>
@@ -517,6 +521,7 @@ export default function SignBridge() {
     </div>
   </section>
 )}
+
 
     </div>
   );
